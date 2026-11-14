@@ -74,3 +74,11 @@ iCloud：CloudKit Web Services 用户 Web Auth Token，只调用 private databas
 见 [云配置](cloud-setup.md)。无有效开发者应用配置时，界面明确显示“当前构建未配置登录”，不展示假登录或模拟成功。
 
 先完成本地与模拟云测试，再分别验证三种云 × 四端；构建、真机与真实授权结果写入 PROGRESS.md。未配置的外部账号不通过伪造 client ID 或上传平台中转绕过。
+
+## 1.0.2 设置与 Apple 原生云
+
+`LanguageSettings` 以 SharedPreferences 保存 `bookworm_language`；`system` 映射空 locale，交给 Flutter 响应系统 locale 列表，未支持的系统语言回退 English。zh/en/es 资源由应用 LocalizationsDelegate 注入 MaterialApp，系统 Material／Cupertino／Widgets 控件也使用相同语言。设置由 LanguageScope 共享；私人云子路由通过 ValueNotifier 接收异步授权／同步状态，避免子页停留在旧状态。
+
+Apple 端 `bookworm/icloud` 原生通道使用 `FileManager.url(forUbiquityContainerIdentifier:)` 获取已获 entitlement 的书虫专属容器，后台队列与 NSFileCoordinator 协调读写、原子替换、拒绝路径穿越与符号链接，识别 evicted placeholder 并触发系统下载。分块协议和多设备进度冲突策略沿用 LibrarySync。iCloud Drive 文件与 CloudKit record 不是同一份存储；不跨接两者。用户自行选择的文件夹桥接已撤销。
+
+Google 仍通过 SDK（Apple/Android）或桌面 PKCE（Windows）授权 appDataFolder；OneDrive 仍通过 Microsoft Graph app root。OAuth app 注册、签名和回调属于构建环境配置，不能用模拟测试代替真实账号验收。

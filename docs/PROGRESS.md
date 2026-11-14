@@ -70,3 +70,13 @@
 - 未配置云入口改为“本版本尚未启用登录／查看说明”，本轮没有声称修复实际云授权。
 - 静态检查通过；16 项测试通过，新增 About、许可证入口／链接复制与云说明路径覆盖。
 - 1.0.1 macOS Release 编译成功，实际菜单 About 路径已验证；iOS 开发签名 IPA 导出成功。版本化签名产物保存在 dist/，macOS 未公证，iOS 仍限已登记设备。
+
+## 2026-11-14 / 1.0.2
+
+- 已撤销同步文件夹选择方案；私人云嵌入设置，主导航三项为书架／听书／设置，macOS Settings… 与 ⌘, 可打开设置。
+- 语言默认跟随系统，可手动选择简体中文、English、Español，自动保存、实时切换。22 项测试通过，静态分析无问题；已在签名 macOS App 中实际验证中文切换与恢复跟随系统。
+- 已参考 STG 的账号和系统 iCloud 接入，隔离客户端和存储容器。Google 四端身份配置已注册（Apple 同包标识共享一个 iOS 类型客户端，另有 Android 本地签名、Android 辅助 Web、Windows 桌面客户端），仅在本机配置文件保存参数，测试用户可登录。
+- Apple 原生容器已创建、App ID 已绑定，专属 Developer ID 描述文件嵌入 macOS 包；iOS development archive/IPA 已签名生成。macOS 已真实登录 iCloud 和 Google Drive，两者均完成空库同步；跨设备传递仍未验收。
+- 用户指定 OneDrive 注册必须使用 mike.castlepines@gmail.com，该账号无 Entra 目录；另一个 Microsoft 账号虽有 Default Directory，用户未同意用它注册书虫。等待指定账号完成 Azure／Entra 开通，不借用 STG client ID。
+- 用户确认新包标识 com.fairyphoenix.bookworm；旧包标识被 Apple 拒绝注册，新旧应用并存，旧本地书库需另行迁移／重导入。
+- 后续真实 Google 验证：成功授权并完成原创示例书导入后的同步，自动同步随后继续成功。示例保留，未操作旧版私人书籍；另一设备下载与位置续接仍需验收。

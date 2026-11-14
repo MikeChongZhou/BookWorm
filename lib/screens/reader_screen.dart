@@ -1,3 +1,5 @@
+import '../l10n/app_strings.dart';
+
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:math' as math;
@@ -46,7 +48,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       ..addListener(changed);
     unawaited(settings());
     restoreTextPosition();
-    saveTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    saveTimer = Timer.periodic(Duration(seconds: 5), (_) {
       unawaited(save());
     });
     if (widget.listen) unawaited(player.play());
@@ -127,7 +129,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     } catch (e) {
       if (mounted && !closing) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('保存进度失败：$e')));
+            .showSnackBar(SnackBar(content: Text(context.tr('保存进度失败：$e'))));
       }
     }
   }
@@ -160,7 +162,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       closing = false;
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('进度未能保存，请重试：$e')));
+            .showSnackBar(SnackBar(content: Text(context.tr('进度未能保存，请重试：$e'))));
       }
     }
   }
@@ -190,9 +192,12 @@ class _ReaderScreenState extends State<ReaderScreen>
           height: MediaQuery.sizeOf(c).height * .75,
           child: Column(
             children: [
-              const Padding(
+              Padding(
                 padding: EdgeInsets.all(20),
-                child: Text('目录与章节', style: TextStyle(fontSize: 22)),
+                child: Text(
+                  context.tr('目录与章节'),
+                  style: TextStyle(fontSize: 22),
+                ),
               ),
               Expanded(
                 child: ListView.builder(
@@ -222,21 +227,21 @@ class _ReaderScreenState extends State<ReaderScreen>
     final value = await showDialog<String>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('书内搜索'),
+        title: Text(context.tr('书内搜索')),
         content: TextField(
           controller: controller,
           autofocus: true,
           onSubmitted: (s) => Navigator.pop(c, s),
-          decoration: const InputDecoration(hintText: '输入要查找的文字'),
+          decoration: InputDecoration(hintText: context.tr('输入要查找的文字')),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(c),
-            child: const Text('取消'),
+            child: Text(context.tr('取消')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(c, controller.text),
-            child: const Text('搜索'),
+            child: Text(context.tr('搜索')),
           ),
         ],
       ),
@@ -269,7 +274,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       context: context,
       builder: (c) => SafeArea(
         child: hits.isEmpty
-            ? const Center(child: Text('未找到文字；扫描 PDF 需要文本层'))
+            ? Center(child: Text(context.tr('未找到文字；扫描 PDF 需要文本层')))
             : ListView.builder(
                 itemCount: hits.length,
                 itemBuilder: (c, i) => ListTile(
@@ -294,13 +299,13 @@ class _ReaderScreenState extends State<ReaderScreen>
       builder: (c) => StatefulBuilder(
         builder: (c, update) => SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
                   children: [
-                    const Text('字号'),
+                    Text(context.tr('字号')),
                     Expanded(
                       child: Slider(
                         value: font,
@@ -318,7 +323,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                   ],
                 ),
                 SwitchListTile(
-                  title: const Text('夜间阅读'),
+                  title: Text(context.tr('夜间阅读')),
                   value: dark,
                   onChanged: (v) {
                     setState(() => dark = v);
@@ -328,26 +333,26 @@ class _ReaderScreenState extends State<ReaderScreen>
                 ),
                 DropdownButtonFormField<double>(
                   initialValue: player.speed,
-                  decoration: const InputDecoration(labelText: '朗读语速'),
-                  items: const [
-                    DropdownMenuItem(value: .35, child: Text('慢速')),
-                    DropdownMenuItem(value: .5, child: Text('标准')),
-                    DropdownMenuItem(value: .65, child: Text('快速')),
+                  decoration: InputDecoration(labelText: context.tr('朗读语速')),
+                  items: [
+                    DropdownMenuItem(value: .35, child: Text(context.tr('慢速'))),
+                    DropdownMenuItem(value: .5, child: Text(context.tr('标准'))),
+                    DropdownMenuItem(value: .65, child: Text(context.tr('快速'))),
                   ],
                   onChanged: (v) {
                     if (v != null) unawaited(player.setSpeed(v));
                   },
                 ),
                 ListTile(
-                  title: const Text('选择系统声音'),
-                  trailing: const Icon(Icons.chevron_right),
+                  title: Text(context.tr('选择系统声音')),
+                  trailing: Icon(Icons.chevron_right),
                   onTap: () {
                     Navigator.pop(c);
                     unawaited(voices());
                   },
                 ),
                 SwitchListTile(
-                  title: const Text('读完本节后停止'),
+                  title: Text(context.tr('读完本节后停止')),
                   value: player.stopAtSection,
                   onChanged: (v) {
                     player.stopAtSection = v;
@@ -359,7 +364,11 @@ class _ReaderScreenState extends State<ReaderScreen>
                   children: [
                     for (final minutes in [0, 15, 30, 60])
                       ChoiceChip(
-                        label: Text(minutes == 0 ? '不定时' : '$minutes 分钟'),
+                        label: Text(
+                          minutes == 0
+                              ? context.tr('不定时')
+                              : context.tr('$minutes 分钟'),
+                        ),
                         selected: minutes == 0
                             ? player.sleepDeadline == null
                             : false,
@@ -372,9 +381,11 @@ class _ReaderScreenState extends State<ReaderScreen>
                 ),
                 if (player.sleepDeadline != null)
                   Padding(
-                    padding: const EdgeInsets.all(8),
+                    padding: EdgeInsets.all(8),
                     child: Text(
-                      '停止时间 ${player.sleepDeadline!.hour.toString().padLeft(2, '0')}:${player.sleepDeadline!.minute.toString().padLeft(2, '0')}',
+                      context.tr(
+                        '停止时间 ${player.sleepDeadline!.hour.toString().padLeft(2, '0')}:${player.sleepDeadline!.minute.toString().padLeft(2, '0')}',
+                      ),
                     ),
                   ),
               ],
@@ -391,9 +402,9 @@ class _ReaderScreenState extends State<ReaderScreen>
       final voices = await player.engine.voices();
       if (!mounted) return;
       if (voices.isEmpty) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('没有可用系统音色，请在系统中安装语音资源')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('没有可用系统音色，请在系统中安装语音资源'))),
+        );
         return;
       }
       final chosen = await showModalBottomSheet<Map<String, String>>(
@@ -403,7 +414,7 @@ class _ReaderScreenState extends State<ReaderScreen>
             children: voices
                 .map(
                   (v) => ListTile(
-                    title: Text(v['name'] ?? '系统语音'),
+                    title: Text(v['name'] ?? context.tr('系统语音')),
                     subtitle: Text(v['locale'] ?? ''),
                     onTap: () => Navigator.pop(c, v),
                   ),
@@ -416,7 +427,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('读取系统声音失败：$e')));
+            .showSnackBar(SnackBar(content: Text(context.tr('读取系统声音失败：$e'))));
       }
     }
   }
@@ -426,10 +437,10 @@ class _ReaderScreenState extends State<ReaderScreen>
     final offset = book.offset.clamp(0, text.length);
     return SingleChildScrollView(
       controller: scroll,
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 50),
+      padding: EdgeInsets.fromLTRB(24, 28, 24, 50),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 720),
+          constraints: BoxConstraints(maxWidth: 720),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -440,9 +451,9 @@ class _ReaderScreenState extends State<ReaderScreen>
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 26),
+              SizedBox(height: 26),
               if (text.isEmpty)
-                const Text('此页没有可提取文本，可切换原版阅读。扫描件暂不支持朗读。')
+                Text(context.tr('此页没有可提取文本，可切换原版阅读。扫描件暂不支持朗读。'))
               else
                 SelectableText.rich(
                   TextSpan(
@@ -452,7 +463,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                         text: text.substring(offset),
                         style: TextStyle(
                           backgroundColor: player.playing
-                              ? const Color(0x225d8950)
+                              ? Color(0x225d8950)
                               : null,
                         ),
                       ),
@@ -483,15 +494,13 @@ class _ReaderScreenState extends State<ReaderScreen>
           if (!didPop) unawaited(leave());
         },
         child: Scaffold(
-          backgroundColor: dark
-              ? const Color(0xff20251f)
-              : const Color(0xfff5f1e7),
+          backgroundColor: dark ? Color(0xff20251f) : Color(0xfff5f1e7),
           appBar: AppBar(
             backgroundColor: Colors.transparent,
             leading: IconButton(
-              tooltip: '返回书架',
+              tooltip: context.tr('返回书架'),
               onPressed: leave,
-              icon: const Icon(Icons.arrow_back),
+              icon: Icon(Icons.arrow_back),
             ),
             title: Text(
               book.title,
@@ -501,7 +510,9 @@ class _ReaderScreenState extends State<ReaderScreen>
             actions: [
               if (book.format == 'pdf')
                 IconButton(
-                  tooltip: pdfOriginal ? '切换文字／朗读视图' : '切换 PDF 原版',
+                  tooltip: pdfOriginal
+                      ? context.tr('切换文字／朗读视图')
+                      : context.tr('切换 PDF 原版'),
                   onPressed: () => setState(() => pdfOriginal = !pdfOriginal),
                   icon: Icon(
                     pdfOriginal
@@ -510,14 +521,14 @@ class _ReaderScreenState extends State<ReaderScreen>
                   ),
                 ),
               IconButton(
-                tooltip: '书内搜索',
+                tooltip: context.tr('书内搜索'),
                 onPressed: search,
-                icon: const Icon(Icons.search),
+                icon: Icon(Icons.search),
               ),
               IconButton(
-                tooltip: '阅读与听书设置',
+                tooltip: context.tr('阅读与听书设置'),
                 onPressed: options,
-                icon: const Icon(Icons.tune),
+                icon: Icon(Icons.tune),
               ),
             ],
           ),
@@ -532,7 +543,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                         player.error = null;
                         unawaited(player.play());
                       },
-                      child: const Text('重试'),
+                      child: Text(context.tr('重试')),
                     ),
                   ],
                 ),
@@ -557,20 +568,17 @@ class _ReaderScreenState extends State<ReaderScreen>
               SafeArea(
                 top: false,
                 child: Container(
-                  color: dark ? const Color(0xff2d342b) : Colors.white70,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
+                  color: dark ? Color(0xff2d342b) : Colors.white70,
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Row(
                         children: [
                           IconButton(
-                            tooltip: '目录',
+                            tooltip: context.tr('目录'),
                             onPressed: contents,
-                            icon: const Icon(Icons.list),
+                            icon: Icon(Icons.list),
                           ),
                           Expanded(
                             child: Slider(
@@ -594,11 +602,11 @@ class _ReaderScreenState extends State<ReaderScreen>
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
                           IconButton(
-                            tooltip: '上一节',
+                            tooltip: context.tr('上一节'),
                             onPressed: book.section > 0
                                 ? () => seek(book.section - 1, 0)
                                 : null,
-                            icon: const Icon(Icons.skip_previous),
+                            icon: Icon(Icons.skip_previous),
                           ),
                           FilledButton.icon(
                             onPressed: book.readable
@@ -618,14 +626,18 @@ class _ReaderScreenState extends State<ReaderScreen>
                                   ? Icons.pause
                                   : Icons.headphones_outlined,
                             ),
-                            label: Text(player.playing ? '暂停听书' : '从当前位置听书'),
+                            label: Text(
+                              player.playing
+                                  ? context.tr('暂停听书')
+                                  : context.tr('从当前位置听书'),
+                            ),
                           ),
                           IconButton(
-                            tooltip: '下一节',
+                            tooltip: context.tr('下一节'),
                             onPressed: book.section < book.sections.length - 1
                                 ? () => seek(book.section + 1, 0)
                                 : null,
-                            icon: const Icon(Icons.skip_next),
+                            icon: Icon(Icons.skip_next),
                           ),
                         ],
                       ),

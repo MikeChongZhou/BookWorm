@@ -22,7 +22,12 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
-      - run: flutter build ${{ matrix.target }} --debug
+      - if: matrix.target == 'windows'
+        run: flutter build windows --debug
+      - if: matrix.target == 'macos'
+        run: |
+          flutter build macos --debug --config-only
+          xcodebuild -workspace macos/Runner.xcworkspace -scheme Runner -configuration Debug -derivedDataPath build/macos CODE_SIGNING_ALLOWED=NO build
       - uses: actions/upload-artifact@v4
         with:
           name: BookWorm-${{ matrix.target }}-debug

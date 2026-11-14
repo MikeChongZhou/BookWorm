@@ -10,7 +10,7 @@ import 'package:yuejian/models/local_book.dart';
 
 void main() {
   testWidgets('local-only library and private cloud choices', (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'bookworm_language': 'zh'});
     PackageInfo.setMockInitialValues(
       appName: 'BookWorm',
       packageName: 'test',
@@ -27,8 +27,11 @@ void main() {
     await tester.tap(find.byTooltip('关于书虫'));
     await tester.pumpAndSettle();
     expect(find.text('关于书虫 · About'), findsOneWidget);
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+    expect(find.text('我的私人云'), findsNothing);
     await tester.tap(find.text('私人云'));
     await tester.pumpAndSettle();
     for (final name in ['OneDrive', 'iCloud', 'Google Drive']) {

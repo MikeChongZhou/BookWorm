@@ -19,3 +19,15 @@
 - 产物：`dist/BookWorm-1.0.1-macOS.zip`、`dist/BookWorm-1.0.1-iOS-development.ipa`。
 - macOS 使用现有 Developer ID 验证签名，未做 Apple 公证；iOS 仅限描述文件登记的开发设备。
 - 云应用身份参数仍缺失；当前版本明确展示未启用登录，不能把提示修正当作云授权已修复。
+
+## 1.0.2 (3) — 设置、语言和独立私人云
+
+正式包标识 `com.fairyphoenix.bookworm`，用户确认独立安装；旧版仍保留。新增设置及语言选择（默认系统），私人云子页，macOS Settings… 菜单／快捷键。已在真实 macOS App 中验证语言切换、iCloud 容器连接、Google Drive 本人账号授权及空书库同步。
+
+安装包：`dist/BookWorm-1.0.2-macOS.zip`、`dist/BookWorm-1.0.2-iOS-development.ipa`。macOS 使用 Developer ID Application 签名并嵌入 BookWorm 专属 iCloud 描述文件，签名严格验证通过；尚未公证。iOS development IPA 仅可装到描述文件登记设备，未上传 App Store／TestFlight，未在实体 iPhone 验收云同步。两端编译均通过，22 项测试通过。
+
+macOS 带 iCloud 权限后，先 `flutter build macos --release --config-only --dart-define-from-file=cloud-config.apple.json`，再 `xcodebuild -workspace macos/Runner.xcworkspace -scheme Runner -configuration Release -derivedDataPath build/macos CODE_SIGNING_ALLOWED=NO build`；对产物嵌入专属描述文件，逐个签名 frameworks/dylibs、最后签主 App，并验证。直接 adhoc 签名不能代替 iCloud entitlement 的 Developer ID 授权。CI 仅编译无签名调试产物。
+
+OneDrive 未注入配置：指定开发者账号缺少 Entra 目录，等待用户开通。Google 安装包目前使用独立项目的测试状态，其他读者不自动获得测试用户资格。
+
+补充真实 Google 验证：用户确认应用专用目录授权后，macOS SDK 成功完成登录；导入仓库原创 `samples/本地读听示例.txt` 后同步完成，后续自动同步仍成功。该示例保留在新版书库中，不涉及旧版私人书籍。尚未以另一设备验证下载／进度续接。证明截图：`dist/BookWorm-1.0.2-settings.png`、`dist/BookWorm-1.0.2-cloud-connected.png`、`dist/BookWorm-1.0.2-google-sync.png`。

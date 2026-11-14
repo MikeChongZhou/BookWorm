@@ -12,6 +12,15 @@ class AppDelegate: FlutterAppDelegate {
       .invokeMethod("showAbout", arguments: nil)
   }
 
+  @objc func showBookWormSettings(_ sender: Any?) {
+    guard let window = mainFlutterWindow,
+          let controller = window.contentViewController as? FlutterViewController else { return }
+    window.makeKeyAndOrderFront(nil)
+    NSApp.activate(ignoringOtherApps: true)
+    FlutterMethodChannel(name: "bookworm/app_menu", binaryMessenger: controller.engine.binaryMessenger)
+      .invokeMethod("showSettings", arguments: nil)
+  }
+
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
     return true
   }

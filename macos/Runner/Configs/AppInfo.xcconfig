@@ -8,7 +8,7 @@
 PRODUCT_NAME = BookWorm
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.yuejian.yuejian
+PRODUCT_BUNDLE_IDENTIFIER = com.fairyphoenix.bookworm
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 com.yuejian. All rights reserved.

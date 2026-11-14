@@ -45,3 +45,15 @@
 示例：`flutter run -d macos --dart-define-from-file=/你的本地路径/cloud-config.json`。
 
 没有配置时本地导入、阅读和 TTS 仍可用。四端云登录验收前，不能宣称“任意设备直接登录即同步”。
+
+## 1.0.2 接入更新（2026-11-14）
+
+- 取消由用户选择同步文件夹的方案；没有目录选择器／书虫服务器。
+- 已参考 STG 的账号直连结构；不会复用 STG 的容器、令牌或 OAuth client ID。
+- Apple 原生 iCloud 使用系统 Apple 账号、专属 `iCloud.com.fairyphoenix.bookworm` 容器和 `CloudDocuments` 权限。`NativeICloudProvider` 经 MethodChannel 调用原生文件协调与按需下载；断开仅停同步，不注销系统账号、不删除云端内容。系统会异步上传，其他设备可见有延迟。旧 CloudKit Web Services 连接器保留供研究，但它与 iCloud Drive 的数据并不互通，不作为四端 iCloud 已接通的证明。Android／Windows 首选同一个 OneDrive 或 Google Drive 账号；不宣称 Apple 原生 API 可用于这些系统。
+- 正式包标识改为 `com.fairyphoenix.bookworm`：Apple 拒绝注册被占用的旧标识，用户确认更名。新旧 App 并存；旧版书籍需重新导入或另行迁移，尤其 iOS 不能读取另一 App 沙箱。
+- 已在独立 Google Cloud 项目创建 Apple（iOS 类型，同包标识供 iOS/macOS）、Windows 桌面、Android 本地测试签名及 Android 登录辅助 Web client；启用 Drive API、`drive.appdata`，目前为 Testing，仅已登记测试用户可登录。公开发布前仍需完成品牌／隐私与上线检查。
+- 端别配置在本机 `cloud-config.apple.json`、`cloud-config.android.json`、`cloud-config.windows.json`。这些文件被 Git 忽略；Android 辅助 Web client secret 仅备份在单独的本机管理配置中，不打包进客户端。CI 默认构建不携带本机配置，不能把 CI 包当作云服务已配置的安装包。
+- Android 注册当前只匹配本机 debug 签名；正式商店签名／其他开发机必须单独登记 SHA-1。Windows 构建需要本机桌面配置，尚未在 Windows 主机实测。
+- Microsoft 指定账号 `mike.castlepines@gmail.com` 没有 Entra 目录，禁止目录外新注册；另一个账号虽有目录，用户选择不使用。等待用户用指定账号开通 Azure／Entra，之后再新建独立 BookWorm 应用。不得借用 STG client ID 假装解决。
+- macOS 已成功连接原生 iCloud，完成空书库同步；双端书籍和进度传递尚未验收。Google 真实账号授权验证见构建记录的后续结果。
