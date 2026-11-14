@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,6 +14,7 @@ import 'cloud/drive_providers.dart';
 import 'cloud/icloud_provider.dart';
 import 'cloud/library_sync.dart';
 import 'screens/reader_screen.dart';
+import 'screens/about_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,6 +47,27 @@ class LibraryScreen extends StatefulWidget {
 
 class _LibraryScreenState extends State<LibraryScreen>
     with WidgetsBindingObserver {
+  static const appMenu = MethodChannel('bookworm/app_menu');
+  bool aboutOpen = false;
+  Future<void> openAbout() async {
+    if (!mounted || aboutOpen) return;
+    aboutOpen = true;
+    try {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => AboutScreen(
+            enabledClouds: providers
+                .where((p) => p.configured)
+                .map((p) => p.name)
+                .toList(),
+          ),
+        ),
+      );
+    } finally {
+      aboutOpen = false;
+    }
+  }
+
   LocalLibrary? store;
   List<LocalBook> books = [];
   String? error;
@@ -65,6 +88,9 @@ class _LibraryScreenState extends State<LibraryScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    appMenu.setMethodCallHandler((call) async {
+      if (call.method == 'showAbout') unawaited(openAbout());
+    });
     unawaited(load());
     autoSync = Timer.periodic(const Duration(minutes: 1), (_) {
       if (active != null && !reading && !busy) unawaited(sync());
@@ -73,6 +99,7 @@ class _LibraryScreenState extends State<LibraryScreen>
 
   @override
   void dispose() {
+    appMenu.setMethodCallHandler(null);
     autoSync?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -272,7 +299,7 @@ class _LibraryScreenState extends State<LibraryScreen>
   Future<void> connect(CloudProvider cloud) async {
     if (busy) return;
     if (!cloud.configured) {
-      toast('当前安装包尚未启用 ${cloud.name} 登录，需要完成云应用配置');
+      await showCloudUnavailable(context, cloud.name);
       return;
     }
     setState(() {
@@ -334,6 +361,15 @@ class _LibraryScreenState extends State<LibraryScreen>
       const SizedBox(height: 12),
       const Text('只在本人各设备之间传递书籍与读听位置。书籍按普通文件保存，不经过书虫服务器。'),
       const SizedBox(height: 24),
+      if (providers.every((p) => !p.configured)) ...[
+        const Card(
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Text('当前测试版尚未启用三家私人云的账号登录。你可以继续使用本地读听；云同步将在完成接入并更新安装包后启用。'),
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
       ...providers.map(
         (cloud) => Card(
           elevation: 0,
@@ -350,12 +386,17 @@ class _LibraryScreenState extends State<LibraryScreen>
                   ? '当前同步来源'
                   : cloud.configured
                   ? '可以连接'
-                  : '当前构建未配置登录',
+                  : '本版本尚未启用登录',
             ),
-            trailing: OutlinedButton(
-              onPressed: busy ? null : () => connect(cloud),
-              child: Text(active == cloud ? '重新授权' : '连接'),
-            ),
+            trailing: cloud.configured
+                ? OutlinedButton(
+                    onPressed: busy ? null : () => connect(cloud),
+                    child: Text(active == cloud ? '重新授权' : '连接'),
+                  )
+                : TextButton(
+                    onPressed: () => showCloudUnavailable(context, cloud.name),
+                    child: const Text('查看说明'),
+                  ),
           ),
         ),
       ),
@@ -460,19 +501,33 @@ class _LibraryScreenState extends State<LibraryScreen>
                           ),
                         ],
                         const Spacer(),
+                        IconButton(
+                          tooltip: '关于书虫',
+                          onPressed: openAbout,
+                          icon: const Icon(Icons.info_outline),
+                        ),
                         if (active != null)
                           IconButton(
                             onPressed: busy ? null : sync,
                             tooltip: '同步私人云',
                             icon: const Icon(Icons.sync),
                           ),
-                        FilledButton.icon(
-                          onPressed: busy || loading || store == null
-                              ? null
-                              : importBook,
-                          icon: const Icon(Icons.add),
-                          label: const Text('导入书籍'),
-                        ),
+                        if (MediaQuery.sizeOf(context).width < 480)
+                          IconButton.filled(
+                            tooltip: '导入书籍',
+                            onPressed: busy || loading || store == null
+                                ? null
+                                : importBook,
+                            icon: const Icon(Icons.add),
+                          )
+                        else
+                          FilledButton.icon(
+                            onPressed: busy || loading || store == null
+                                ? null
+                                : importBook,
+                            icon: const Icon(Icons.add),
+                            label: const Text('导入书籍'),
+                          ),
                       ],
                     ),
                   ),

@@ -11,3 +11,11 @@
 - 构建产物与签名／描述文件不进入源码 Git 历史，未导出私人签名密钥。
 - 静态检查与 13 项测试此前通过；该次构建未改变功能代码。三家私人云尚未配置真实应用，不宣称已完成云同步实测。
 - 默认 Flutter 占位图标仍存在；当前为试用版本，不是商店审核已通过的商业发布。
+
+## 1.0.1 (2) About 更新
+
+- 四端共用 About 页；macOS 菜单 About 接入并通过实际界面验证，署名／版权为 Fairy Phoenix Foundation。
+- 静态检查通过，16 项测试通过。macOS Release 与 iOS development IPA 构建成功。
+- 产物：`dist/BookWorm-1.0.1-macOS.zip`、`dist/BookWorm-1.0.1-iOS-development.ipa`。
+- macOS 使用现有 Developer ID 验证签名，未做 Apple 公证；iOS 仅限描述文件登记的开发设备。
+- 云应用身份参数仍缺失；当前版本明确展示未启用登录，不能把提示修正当作云授权已修复。

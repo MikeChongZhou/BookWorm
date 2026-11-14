@@ -49,3 +49,9 @@ flutter test
 私有仓库：https://github.com/MikeChongZhou/BookWorm 。
 
 已生成 macOS Release App（Developer ID 签名，未完成 Apple 公证）和 iOS development IPA（仅限描述文件登记设备，不是 App Store 包），详见 [构建记录](docs/builds.md)。安装包保存在本地 dist/，不进入源码 Git 历史。
+
+## 1.0.1：About 与云连接提示
+
+新增参考 STG 的 About（版本、Fairy Phoenix Foundation 署名与版权、使用／隐私说明、可点击许可证）；macOS 菜单接到同一页面。
+
+当前私人云登录仍未配置，页面明确标记“本版本尚未启用登录”并提供说明，不将其显示为账号连接失败。详见 [说明](docs/about.md)。
