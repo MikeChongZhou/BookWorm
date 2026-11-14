@@ -27,7 +27,7 @@ flutter test
 
 已配置的云构建可使用 `--dart-define-from-file=/你的本地路径/cloud-config.json`。配置不提交 Git，不打印令牌。
 
-`.github/workflows/build-apps.yml` 提供四端调试 CI 草案，尚未推送或运行；调试包不等于商店签名发布包。
+`.github/workflows/build-apps.yml` 已上传 GitHub，运行结果以仓库 Actions 页面为准；调试包不等于商店签名发布包。
 
 本地体验示例：[本地读听示例](samples/本地读听示例.txt)。
 
@@ -43,3 +43,9 @@ flutter test
 ## 额度停止约定
 
 每阶段及长任务间使用 `get_usage_limits` 查询；任一适用窗口剩余 ≤5% 时保存进度并停止，不自动使用重置券，见 AGENTS.md。
+
+## 源码仓库与本地签名构建
+
+私有仓库：https://github.com/MikeChongZhou/BookWorm 。
+
+已生成 macOS Release App（Developer ID 签名，未完成 Apple 公证）和 iOS development IPA（仅限描述文件登记设备，不是 App Store 包），详见 [构建记录](docs/builds.md)。安装包保存在本地 dist/，不进入源码 Git 历史。

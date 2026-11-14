@@ -15,7 +15,7 @@
 - 分段系统 TTS、暂停续播、语速／音色、定时、本节停止与进度保存；语音异常与保存失败可显示。
 - OneDrive／Google Drive 用户授权与 API 连接器；iCloud CloudKit private Web Services 连接器。
 - 私人云分块＋哈希校验＋最后提交清单；每设备独立进度，冲突由用户选位置；已处理的远端位置不会每次重复弹窗。
-- 四端调试构建 CI 文件，未推送／未运行。
+- 四端调试构建 CI 文件已上传 GitHub，运行结果以 Actions 页面为准。
 
 ## 验证记录
 
@@ -24,7 +24,7 @@
 - macOS：最终代码 Debug 构建成功；本轮通过原生界面观察启动成功。
 - iOS：最终代码模拟器 Debug 构建成功；尚未做真机文件／声音／后台行为测试。
 - Android：最终代码 Debug APK 构建成功；尚未完成安卓真机听书与后台行为验收。
-- Windows：当前主机无法构建，准备了 Windows CI 草案，未执行。
+- Windows：当前主机无法构建，Windows CI 配置已上传；未以云构建结果代替本机验证。
 
 ## 尚未完成的明确边界
 
@@ -50,5 +50,13 @@
 - dist/BookWorm-macOS-debug.zip：本机调试版，已验证启动。
 - dist/BookWorm-Android-debug.apk：调试签名 APK，已构建，未安装真机验收。
 - build/ios/iphonesimulator/Runner.app：模拟器构建，不能直接作为真机安装包。
-- Windows 仍未构建；CI 文件未推送或运行。
+- Windows 本机未构建；CI 配置已上传。
 - 三家云真实登录仍被缺少开发者应用配置阻塞；没有自动注册云应用或建立账号权限。
+
+## GitHub 上传与签名 App
+
+- 私有仓库 MikeChongZhou/BookWorm 已创建并上传，初次源码远程提交 6980c20b88734ea6e5d3a25bb0b533d12baefcdb，树 e539352fb8aa03f9bf2a564ad0ddfa0ccaf1375f 与本地一致。
+- macOS Release 编译成功，嵌套框架及主 App 已用 Developer ID 签名并通过严格验证；未提交 Apple 公证。
+- iOS Release archive 和 development IPA 导出成功，版本 1.0.0 (1)，描述文件到期 2027-08-01，登记设备 2 台（不在仓库保存设备标识）。
+- 未安装用户手机、未上传 App Store／TestFlight；默认占位图标仍待替换。
+- 云登录配置仍缺失，不因签名构建成功而标记云同步实测通过。
