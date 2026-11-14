@@ -1,2 +1,45 @@
-# BookWorm
-BookWorm 书虫 — 四端本地阅读、TTS 听书与私人云同步。
+# BookWorm／书虫
+
+第一阶段：四端本地导入、阅读、系统 TTS 听书，以及本人私人云书籍／进度同步。书籍按普通文件保存，不加密；不做公共书库、交易、借阅或分成。
+
+## 已实现的本地流程
+
+- TXT（UTF-8）、EPUB 文字／章节、PDF 原版阅读与文本提取；单文件 ≤50 MB。
+- 书架、搜索、目录、书内检索、字号、夜间模式和本地读听定位。
+- 分段系统 TTS、暂停续听、语速与系统声音、定时关闭及本节结束停止。
+- 普通文件持久化、原件保留、重复检测、旧原型数据迁移；异常文件保留并报错。
+- OneDrive／Google Drive／iCloud 连接器、分块校验同步和跨设备进度选择，已接入界面。
+
+**真实云登录仍需配置并实测**：当前仓库没有三家云开发者应用的 client IDs／container／回调等配置，默认构建显示未配置，不会假装连接成功。[云接入说明](docs/cloud-setup.md)
+
+EPUB 当前为文字阅读，不是完整图文排版；扫描 PDF 暂不做 OCR。系统 TTS 的后台／锁屏／媒体键还需要逐端真机验证及补充适配，不能据前台播放代码宣称后台能力完成。
+
+## 运行与验证
+
+```sh
+flutter pub get
+flutter run -d macos
+flutter analyze
+flutter test
+```
+
+其他端：`flutter build apk --debug`、`flutter build ios --simulator --debug --no-codesign`；Windows 在 Windows 主机执行 `flutter build windows --debug`。
+
+已配置的云构建可使用 `--dart-define-from-file=/你的本地路径/cloud-config.json`。配置不提交 Git，不打印令牌。
+
+`.github/workflows/build-apps.yml` 提供四端调试 CI 草案，尚未推送或运行；调试包不等于商店签名发布包。
+
+本地体验示例：[本地读听示例](samples/本地读听示例.txt)。
+
+## 文档
+
+- [第一阶段需求 0.3](docs/requirements.md)
+- [第一阶段设计 0.3](docs/system-design.md)
+- [云配置与已知接入限制](docs/cloud-setup.md)
+- [实际进度](docs/PROGRESS.md)
+
+旧商业远景以 v0.2 文档归档，本阶段不执行其中的加密、公共书库和交易功能。App 的系统包标识暂保留旧值，避免重命名导致丢失原型本地数据；可见名称已更新为 BookWorm／书虫。
+
+## 额度停止约定
+
+每阶段及长任务间使用 `get_usage_limits` 查询；任一适用窗口剩余 ≤5% 时保存进度并停止，不自动使用重置券，见 AGENTS.md。

@@ -1,0 +1,167 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:crypto/crypto.dart';
+
+import '../models/local_book.dart';
+import '../storage/local_library.dart';
+import 'cloud_provider.dart';
+
+class RemotePosition {
+  final String bookId, device;
+  final int section, offset, modified;
+  RemotePosition(
+    this.bookId,
+    this.device,
+    this.section,
+    this.offset,
+    this.modified,
+  );
+}
+
+class SyncResult {
+  int uploaded = 0, downloaded = 0;
+  final List<RemotePosition> positions = [];
+}
+
+class LibrarySync {
+  final LocalLibrary library;
+  final String deviceId;
+  LibrarySync(this.library, this.deviceId);
+  static const chunkSize = 192 * 1024;
+  Future<SyncResult> run(
+    CloudProvider cloud, {
+    void Function(String)? status,
+  }) async {
+    final result = SyncResult();
+    final known = (await cloud.list()).toSet();
+    var local = await library.load();
+    // Immutable content chunks are committed by publishing the manifest LAST.
+    for (final book in local) {
+      final key = 'book-${book.id}.manifest';
+      if (!known.contains(key)) {
+        status?.call('上传 ${book.title}');
+        final source = await library.readSource(book.id);
+        final metadata = book.toJson()
+          ..['section'] = 0
+          ..['offset'] = 0;
+        final bytes = utf8.encode(
+          jsonEncode({'book': metadata, 'source': base64Encode(source)}),
+        );
+        final parts = <Map<String, dynamic>>[];
+        for (
+          var start = 0, index = 0;
+          start < bytes.length;
+          start += chunkSize, index++
+        ) {
+          final end = (start + chunkSize).clamp(0, bytes.length);
+          final part = Uint8List.fromList(bytes.sublist(start, end));
+          final partKey = 'book-${book.id}-$index.part';
+          // Re-upload incomplete chunks, never trust a name without a committed hash.
+          await cloud.write(partKey, part);
+          parts.add({
+            'key': partKey,
+            'hash': sha256.convert(part).toString(),
+            'size': part.length,
+          });
+        }
+        await cloud.write(
+          key,
+          Uint8List.fromList(
+            utf8.encode(
+              jsonEncode({'schema': 1, 'id': book.id, 'parts': parts}),
+            ),
+          ),
+        );
+        known.add(key);
+        result.uploaded++;
+      }
+      await cloud.write(
+        'position-${book.id}-$deviceId.json',
+        Uint8List.fromList(
+          utf8.encode(jsonEncode({...book.position(), 'device': deviceId})),
+        ),
+      );
+    }
+    // Refresh after uploads so per-device events never share an overwrite-prone global file.
+    final keys = await cloud.list();
+    final localIds = local.map((b) => b.id).toSet();
+    for (final key in keys.where(
+      (k) => RegExp(r'^book-[a-f0-9]{64}\.manifest$').hasMatch(k),
+    )) {
+      final manifest = Map<String, dynamic>.from(
+        jsonDecode(utf8.decode(await cloud.read(key))),
+      );
+      final id = manifest['id'] as String;
+      if (!RegExp(r'^[a-f0-9]{64}$').hasMatch(id) ||
+          key != 'book-$id.manifest') {
+        throw const CloudFailure('云书籍标识不匹配');
+      }
+      if (localIds.contains(id)) continue;
+      status?.call('下载私人书籍');
+      final parts = manifest['parts'] as List;
+      if (parts.length > 1000) throw const CloudFailure('云文件块数过多');
+      final builder = BytesBuilder(copy: false);
+      var total = 0;
+      for (var index = 0; index < parts.length; index++) {
+        final part = parts[index];
+        if (part['key'] != 'book-$id-$index.part') {
+          throw const CloudFailure('云内容路径不匹配');
+        }
+        final bytes = await cloud.read(part['key']);
+        total += bytes.length;
+        if (total > 100 * 1024 * 1024 ||
+            bytes.length != part['size'] ||
+            sha256.convert(bytes).toString() != part['hash']) {
+          throw const CloudFailure('私人云文件校验失败，本机内容未覆盖');
+        }
+        builder.add(bytes);
+      }
+      final payload = Map<String, dynamic>.from(
+        jsonDecode(utf8.decode(builder.takeBytes())),
+      );
+      final book = LocalBook.fromJson(
+        Map<String, dynamic>.from(payload['book']),
+      );
+      final source = base64Decode(payload['source']);
+      if (book.id != id || sha256.convert(source).toString() != id) {
+        throw const CloudFailure('书籍原件校验失败');
+      }
+      await library.source(id, source);
+      await library.save(book);
+      localIds.add(id);
+      result.downloaded++;
+    }
+    local = await library.load();
+    final map = {for (final b in local) b.id: b};
+    for (final key in keys.where(
+      (k) => RegExp(r'^position-[a-f0-9]{64}-[a-f0-9]+\.json$').hasMatch(k),
+    )) {
+      if (key.endsWith('-$deviceId.json')) continue;
+      final p = Map<String, dynamic>.from(
+        jsonDecode(utf8.decode(await cloud.read(key))),
+      );
+      final b = map[p['id']];
+      if (b == null) continue;
+      final section = p['section'] as int, offset = p['offset'] as int;
+      if (section < 0 ||
+          section >= b.sections.length ||
+          offset < 0 ||
+          offset > b.sections[section].text.length) {
+        continue;
+      }
+      if (b.section != section || b.offset != offset) {
+        result.positions.add(
+          RemotePosition(
+            b.id,
+            p['device'] as String,
+            section,
+            offset,
+            p['modified'] as int,
+          ),
+        );
+      }
+    }
+    return result;
+  }
+}

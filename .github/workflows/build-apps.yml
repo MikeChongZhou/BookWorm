@@ -1,0 +1,50 @@
+name: Build BookWorm apps
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'codex/**']
+jobs:
+  desktop:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: macos
+          - os: windows-latest
+            target: windows
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.1'
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter build ${{ matrix.target }} --debug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BookWorm-${{ matrix.target }}-debug
+          path: |
+            build/macos/Build/Products/Debug/*.app
+            build/windows/x64/runner/Debug/
+          retention-days: 7
+  mobile:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.1'
+          cache: true
+      - run: flutter pub get
+      - run: flutter build ios --simulator --debug --no-codesign
+      - run: flutter build apk --debug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BookWorm-mobile-debug
+          path: |
+            build/ios/iphonesimulator/*.app
+            build/app/outputs/flutter-apk/*debug.apk
+          retention-days: 7
