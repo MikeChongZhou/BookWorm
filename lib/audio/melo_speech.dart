@@ -2,16 +2,18 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
 
 import 'melo_model.dart';
 import 'reading_player.dart';
+import 'file_audio_transport.dart';
+import 'system_file_speech.dart';
 
 /// Native inference stays on a long-lived isolate, never on the UI thread.
-class MeloSpeech implements SpeechEngine, SpeechResources, NextSpeech {
-  final AudioPlayer _audio = AudioPlayer();
+class MeloSpeech
+    implements SpeechEngine, SpeechResources, NextSpeech, SpeechTiming {
+  final FileAudioTransport _transport = FileAudioTransport();
   final Map<int, Completer<String>> _pending = {};
   final Map<String, Future<String>> _cache = {};
   ReceivePort? _receive;
@@ -19,13 +21,10 @@ class MeloSpeech implements SpeechEngine, SpeechResources, NextSpeech {
   SendPort? _worker;
   Directory? _temporary;
   Future<void>? _preparing;
-  Completer<void>? _completion;
-  StreamSubscription<void>? _completed;
   void Function(int, int)? _progress;
   String? _next;
   int _sequence = 0, _generation = 0;
   bool _closed = false;
-  double _speed = 1;
 
   @override
   Future<void> prepare() => _preparing ??= _prepare();
@@ -61,21 +60,16 @@ class MeloSpeech implements SpeechEngine, SpeechResources, NextSpeech {
     ]);
     await ready.future.timeout(const Duration(seconds: 90));
     if (_closed) throw StateError('语音已关闭');
-    await _audio.setReleaseMode(ReleaseMode.stop);
-    await _audio.setAudioContext(
-      AudioContext(
-        iOS: AudioContextIOS(category: AVAudioSessionCategory.playback),
-        android: const AudioContextAndroid(
-          contentType: AndroidContentType.speech,
-          usageType: AndroidUsageType.media,
-          audioFocus: AndroidAudioFocus.gain,
-        ),
-      ),
-    );
-    _completed = _audio.onPlayerComplete.listen((_) {
-      if (_completion?.isCompleted == false) _completion!.complete();
-    });
+    await _transport.prepare();
   }
+
+  @override
+  bool get hasMediaClock => true;
+  @override
+  void playbackProgress(void Function(Duration, Duration) callback) =>
+      _transport.progress = callback;
+  @override
+  void startPosition(Duration position) => _transport.start = position;
 
   Future<String> _generate(String text) {
     return _cache.putIfAbsent(text, () {
@@ -111,36 +105,29 @@ class MeloSpeech implements SpeechEngine, SpeechResources, NextSpeech {
             .catchError((Object _) {}),
       );
     }
-    final done = Completer<void>();
-    _completion = done;
-    try {
-      // No word timestamps: retain chunk start rather than guessing an offset.
-      _progress?.call(0, text.length);
-      await _audio.play(DeviceFileSource(file));
-      if (_closed || generation != _generation) {
-        await _audio.stop();
-        return;
-      }
-      await _audio.setPlaybackRate(_speed);
-      final next = _next;
-      if (next != null && next.trim().isNotEmpty) {
-        unawaited(_generate(next).then<void>((_) {}).catchError((Object _) {}));
-      }
-      await done.future;
-    } finally {
-      if (identical(_completion, done)) _completion = null;
-    }
+    _progress?.call(0, text.length);
+    await _transport.play(
+      file,
+      prefetch: () {
+        final next = _next;
+        if (next != null && next.trim().isNotEmpty) {
+          unawaited(
+            _generate(next).then<void>((_) {}).catchError((Object _) {}),
+          );
+        }
+      },
+    );
   }
 
   @override
   Future<void> stop() async {
     _generation++;
-    if (_completion?.isCompleted == false) _completion!.complete();
-    await _audio.stop();
+    await _transport.stop();
   }
 
   @override
-  Future<void> rate(double rate) async => _speed = (rate * 2).clamp(.5, 2);
+  Future<void> rate(double rate) async =>
+      _transport.speed = (rate * 2).clamp(.5, 2);
   @override
   Future<void> voice(Map<String, String> voice) async {}
   @override
@@ -171,8 +158,7 @@ class MeloSpeech implements SpeechEngine, SpeechResources, NextSpeech {
       completer.completeError(StateError('语音已关闭'));
     }
     _pending.clear();
-    await _completed?.cancel();
-    await _audio.dispose();
+    await _transport.close();
     if (_temporary != null && await _temporary!.exists()) {
       await _temporary!.delete(recursive: true);
     }
@@ -238,11 +224,13 @@ void meloWorker(List<dynamic> args) {
   }
 }
 
-class SelectedSpeech implements SpeechEngine, SpeechResources, NextSpeech {
+class SelectedSpeech
+    implements SpeechEngine, SpeechResources, NextSpeech, SpeechTiming {
   SpeechEngine? _engine;
   Future<void>? _preparing;
   bool _closed = false;
   void Function(int, int)? _callback;
+  void Function(Duration, Duration)? _timing;
   @override
   Future<void> prepare() => _preparing ??= _prepare();
   Future<void> _prepare() async {
@@ -250,10 +238,35 @@ class SelectedSpeech implements SpeechEngine, SpeechResources, NextSpeech {
     if (_closed) throw StateError('语音已关闭');
     final engine = MeloModel.instance.selected == 'melo'
         ? MeloSpeech()
-        : DeviceSpeech();
+        : (Platform.isIOS || Platform.isAndroid
+              ? SystemFileSpeech()
+              : DeviceSpeech());
     _engine = engine;
     if (_callback != null) engine.progress(_callback!);
+    if (_timing != null && engine is SpeechTiming) {
+      (engine as SpeechTiming).playbackProgress(_timing!);
+    }
     await engine.prepare();
+  }
+
+  @override
+  bool get hasMediaClock =>
+      _engine is SpeechTiming && (_engine as SpeechTiming).hasMediaClock;
+  @override
+  void playbackProgress(void Function(Duration, Duration) callback) {
+    _timing = callback;
+    final engine = _engine;
+    if (engine is SpeechTiming) {
+      (engine as SpeechTiming).playbackProgress(callback);
+    }
+  }
+
+  @override
+  void startPosition(Duration position) {
+    final engine = _engine;
+    if (engine is SpeechTiming) {
+      (engine as SpeechTiming).startPosition(position);
+    }
   }
 
   @override

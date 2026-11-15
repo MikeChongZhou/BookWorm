@@ -3,6 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  audio_service_win
   audioplayers_windows
   desktop_webview_window
   flutter_secure_storage_windows

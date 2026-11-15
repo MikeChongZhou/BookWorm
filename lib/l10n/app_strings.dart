@@ -51,6 +51,25 @@ class _StringsDelegate extends LocalizationsDelegate<AppStrings> {
 }
 
 const dynamicTranslations = <String, List<String>>{
+  r"^第 (\d+) 章 · 共 (\d+) 章$": ["Chapter {1} of {2}", "Capítulo {1} de {2}"],
+  r"^第 (\d+) 章$": ["Chapter {1}", "Capítulo {1}"],
+  r"^每 (\d+) 秒翻页$": ["Turn every {1} seconds", "Pasar cada {1} segundos"],
+  r"^找到 (\d+) 本书$": ["{1} books found", "{1} libros encontrados"],
+  r"^公版书目录已更新 · (\d+) 本$": [
+    "Catalog updated · {1} books",
+    "Catálogo actualizado · {1} libros",
+  ],
+  r"^正在更新 Standard Ebooks · 第 (\d+) 页$": [
+    "Updating Standard Ebooks · page {1}",
+    "Actualizando Standard Ebooks · página {1}",
+  ],
+  r"^最近更新：(.+)$": ["Last updated: {1}", "Última actualización: {1}"],
+  r"^下载中 · (.+) MB$": ["Downloading · {1} MB", "Descargando · {1} MB"],
+  r"^下载未完成，可重试：(.+)$": [
+    "Download incomplete. Retry: {1}",
+    "Descarga incompleta. Reintenta: {1}",
+  ],
+
   r"^上传本地文件中，已上传 (\d+) 个文件$": [
     "Uploading local files · {1} files uploaded",
     "Subiendo archivos locales · {1} archivos subidos",

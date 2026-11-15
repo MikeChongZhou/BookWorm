@@ -73,17 +73,20 @@ Future<void> tick() async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
-  test('UTF-8, headings and bounded sections preserve readable body', () async {
-    final text = '第一章 初见\n${'风吹过树梢。' * 600}\n第二章 后来\n雨停了。';
-    final book = await BookImporter().parse(
-      '测试.TXT',
-      Uint8List.fromList(utf8.encode(text)),
-    );
-    expect(book.sections.length, greaterThan(2));
-    expect(book.sections.every((s) => s.text.length <= 1600), isTrue);
-    expect(book.sections.last.title, '第二章 后来');
-    expect(book.sections.map((s) => s.text).join(), contains('雨停了。'));
-  });
+  test(
+    'UTF-8 preserves full chapters; pagination belongs to the reader',
+    () async {
+      final text = '第一章 初见\n${'风吹过树梢。' * 600}\n第二章 后来\n雨停了。';
+      final book = await BookImporter().parse(
+        '测试.TXT',
+        Uint8List.fromList(utf8.encode(text)),
+      );
+      expect(book.sections.length, 2);
+      expect(book.sections.first.text.length, greaterThan(1600));
+      expect(book.sections.last.title, '第二章 后来');
+      expect(book.sections.map((s) => s.text).join(), contains('雨停了。'));
+    },
+  );
   test('EPUB follows spine rather than archive order and reads metadata', () {
     final archive = Archive();
     void file(String path, String text) => archive.addFile(
@@ -110,6 +113,31 @@ void main() {
     expect(result.$3.first.text, contains('甲。'));
     expect(result.$3.last.text, contains('乙。'));
     expect(result.$3.map((s) => s.text).join(), isNot(contains('bad()')));
+  });
+  test('EPUB narrative mentioning an earlier chapter is never removed as a heading', () {
+    final archive = Archive();
+    void file(String name, String text) => archive.addFile(
+      ArchiveFile(name, utf8.encode(text).length, utf8.encode(text)),
+    );
+    file(
+      'META-INF/container.xml',
+      '<container><rootfiles><rootfile full-path="book.opf"/></rootfiles></container>',
+    );
+    file(
+      'book.opf',
+      '<package><metadata><title>测试</title></metadata><manifest><item id="a" href="a.xhtml"/></manifest><spine><itemref idref="a"/></spine></package>',
+    );
+    const paragraph = '第四回中既将薛家母子在荣府内寄居等事略已表明，此回则暂不能写矣。';
+    file(
+      'a.xhtml',
+      '<html><body><h1>第五回</h1><p>$paragraph</p><p>随后继续正文。</p></body></html>',
+    );
+    final result = BookImporter.epub(
+      Uint8List.fromList(ZipEncoder().encode(archive)),
+    );
+    expect(result.$3.length, 1);
+    expect(result.$3.single.title, '第五回');
+    expect(result.$3.single.text, contains(paragraph));
   });
   test('unsupported encoding and empty inputs fail explicitly', () async {
     await expectLater(

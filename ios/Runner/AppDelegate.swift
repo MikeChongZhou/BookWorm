@@ -1,9 +1,11 @@
 import Flutter
 import UIKit
+import AVFoundation
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var privateCloud: BookWormICloud?
+  private var speechRenderer: BookWormSpeechRenderer?
 
   override func application(
     _ application: UIApplication,
@@ -14,9 +16,94 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "BookWormSpeechRenderer") {
+      speechRenderer = BookWormSpeechRenderer(messenger: registrar.messenger())
+    }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "BookWormICloud") {
       privateCloud = BookWormICloud(messenger: registrar.messenger())
     }
+  }
+}
+
+// Complete a PCM16 WAV only after AVSpeechSynthesizer has delivered its final
+// buffer. The media player never sees an open/unfinalized speech file.
+final class BookWormSpeechRenderer: NSObject, AVSpeechSynthesizerDelegate {
+  private let channel: FlutterMethodChannel
+  private let synth = AVSpeechSynthesizer()
+  private var result: FlutterResult?
+  private var samples = Data()
+  private var sampleRate: Double = 22050
+  private var destination: String = ""
+  init(messenger: FlutterBinaryMessenger) {
+    channel = FlutterMethodChannel(name: "bookworm/system_speech", binaryMessenger: messenger)
+    super.init()
+    synth.delegate = self
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self else { return }
+      guard call.method == "render", let args = call.arguments as? [String: Any],
+        let text = args["text"] as? String, let path = args["path"] as? String else {
+        result(FlutterMethodNotImplemented); return
+      }
+      guard self.result == nil else { result(FlutterError(code: "busy", message: "语音正在准备中", details: nil)); return }
+      let url = URL(fileURLWithPath: path).standardizedFileURL
+      let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!.standardizedFileURL.path
+      guard url.path.hasPrefix(caches + "/") || url.path.hasPrefix(NSTemporaryDirectory()) else {
+        result(FlutterError(code: "path", message: "语音缓存位置无效", details: nil)); return
+      }
+      self.result = result; self.destination = path; self.samples = Data()
+      let voice = args["voice"] as? [String: String]
+      let utterance = AVSpeechUtterance(string: text)
+      if let identifier = voice?["identifier"] { utterance.voice = AVSpeechSynthesisVoice(identifier: identifier) }
+      if utterance.voice == nil, let name = voice?["name"] {
+        utterance.voice = AVSpeechSynthesisVoice.speechVoices().first { $0.name == name && (voice?["locale"] == nil || $0.language == voice?["locale"]) }
+      }
+      if utterance.voice == nil { utterance.voice = AVSpeechSynthesisVoice(language: voice?["locale"] ?? "zh-CN") }
+      utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+      self.synth.write(utterance) { [weak self] buffer in
+        guard let pcm = buffer as? AVAudioPCMBuffer else { return }
+        if Thread.isMainThread { self?.consume(pcm) }
+        else { DispatchQueue.main.sync { self?.consume(pcm) } }
+      }
+    }
+  }
+  private func consume(_ buffer: AVAudioPCMBuffer) {
+    guard result != nil else { return }
+    if buffer.frameLength == 0 { finish(); return }
+    sampleRate = buffer.format.sampleRate
+    let channels = Int(buffer.format.channelCount)
+    let frames = Int(buffer.frameLength)
+    let interleaved = buffer.format.isInterleaved
+    for frame in 0..<frames {
+      var value: Float = 0
+      for channel in 0..<channels {
+        let index = interleaved ? frame * channels + channel : frame
+        let bank = interleaved ? 0 : channel
+        if let data = buffer.floatChannelData { value += data[bank][index] }
+        else if let data = buffer.int16ChannelData { value += Float(data[bank][index]) / 32768 }
+        else if let data = buffer.int32ChannelData { value += Float(data[bank][index]) / 2147483648 }
+      }
+      let average = value / Float(max(1, channels))
+      var sample = Int16(max(-32768, min(32767, Int(average * 32767)))).littleEndian
+      withUnsafeBytes(of: &sample) { samples.append(contentsOf: $0) }
+    }
+  }
+  private func finish() {
+    guard let callback = result else { return }
+    defer { result = nil; samples = Data() }
+    guard !samples.isEmpty else { callback(FlutterError(code: "empty", message: "此系统音色未生成音频，请更换音色", details: nil)); return }
+    var wav = Data()
+    func tag(_ value: String) { wav.append(value.data(using: .ascii)!) }
+    func number<T: FixedWidthInteger>(_ value: T) {
+      var number = value.littleEndian; withUnsafeBytes(of: &number) { wav.append(contentsOf: $0) }
+    }
+    tag("RIFF"); number(UInt32(36 + samples.count)); tag("WAVEfmt "); number(UInt32(16))
+    number(UInt16(1)); number(UInt16(1)); number(UInt32(sampleRate)); number(UInt32(sampleRate) * 2)
+    number(UInt16(2)); number(UInt16(16)); tag("data"); number(UInt32(samples.count)); wav.append(samples)
+    do { try wav.write(to: URL(fileURLWithPath: destination), options: .atomic); callback(1) }
+    catch { callback(FlutterError(code: "write", message: "无法保存语音缓存", details: nil)) }
+  }
+  func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+    result?(FlutterError(code: "cancelled", message: "语音生成已取消", details: nil)); result = nil; samples = Data()
   }
 }
 

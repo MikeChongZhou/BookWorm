@@ -1,4 +1,103 @@
 const translations = <String, List<String>>{
+  "有其他设备进度，可手动查看": [
+    "Other device positions are available to review",
+    "Hay posiciones de otros dispositivos para revisar",
+  ],
+  "检查其他设备进度": [
+    "Review other device positions",
+    "Revisar posiciones de otros dispositivos",
+  ],
+  "关闭听书": ["Close player", "Cerrar reproductor"],
+
+  "同步已延后，优先读书与听书": [
+    "Sync deferred while reading or listening",
+    "Sincronización pospuesta mientras lees o escuchas",
+  ],
+  "目录更新已延后，优先读书与听书": [
+    "Catalog update deferred while reading or listening",
+    "Actualización del catálogo pospuesta mientras lees o escuchas",
+  ],
+
+  "下载": ["Downloads", "Descargas"],
+  "公版书下载": ["Public-domain books", "Libros de dominio público"],
+  "全部": ["All", "Todos"],
+  "来源：文硕阁公版书目录、Standard Ebooks。免费下载到本地书架，支持离线读听。": [
+    "Browse Wenshuoge’s public-domain catalog and Standard Ebooks. Download free books for offline reading and listening.",
+    "Explora el catálogo de dominio público de Wenshuoge y Standard Ebooks. Descarga libros gratis para leer y escuchar sin conexión.",
+  ],
+  "公版标注来自书源；Standard Ebooks 按美国公版范围整理，不同地区可能不同。": [
+    "Public-domain labels come from the sources. Standard Ebooks uses U.S. public-domain status; other regions may differ.",
+    "Las etiquetas de dominio público proceden de las fuentes. Standard Ebooks aplica el dominio público de EE. UU.; puede variar en otras regiones.",
+  ],
+  "书库目录每天检查一次，离线时可搜索缓存目录。": [
+    "The catalog is checked daily. Cached books remain searchable offline.",
+    "El catálogo se comprueba a diario y se puede buscar en la caché sin conexión.",
+  ],
+  "更新目录": ["Update catalog", "Actualizar catálogo"],
+  "目录正在后台更新，可先继续读书或听书。": [
+    "Catalog updating in the background. You can keep reading or listening.",
+    "El catálogo se actualiza en segundo plano. Puedes seguir leyendo o escuchando.",
+  ],
+  "没有找到书籍，可以调整搜索或更新目录。": [
+    "No books found. Try another search or update the catalog.",
+    "No se encontraron libros. Prueba otra búsqueda o actualiza el catálogo.",
+  ],
+  "重新下载": ["Download again", "Descargar de nuevo"],
+  "已下载到本地书架": ["Downloaded to your library", "Descargado a tu biblioteca"],
+  "定时": ["Timer", "Temporizador"],
+  "已定时": ["Timer set", "Temporizador activo"],
+  "定时停止": ["Sleep timer", "Temporizador de apagado"],
+  "读完本章后停止": [
+    "Stop at the end of this chapter",
+    "Parar al terminar el capítulo",
+  ],
+  "声音": ["Voice", "Voz"],
+  "原文": ["Text", "Texto"],
+  "播放": ["Play", "Reproducir"],
+  "笔记": ["Notes", "Notas"],
+  "自动翻页": ["Auto turn", "Pasar páginas"],
+  "颜色": ["Colors", "Colores"],
+  "回退20秒": ["Rewind 20 seconds", "Retroceder 20 segundos"],
+  "快进20秒": ["Forward 20 seconds", "Avanzar 20 segundos"],
+  "回退一章": ["Previous chapter", "Capítulo anterior"],
+  "前进一章": ["Next chapter", "Capítulo siguiente"],
+  "预计": ["Estimated", "Estimado"],
+  "正在准备语音…": ["Preparing speech…", "Preparando voz…"],
+  "正在打开书籍…": ["Opening book…", "Abriendo libro…"],
+  "关闭自动翻页": [
+    "Turn off auto page turning",
+    "Desactivar cambio automático de página",
+  ],
+  "字体大小": ["Font size", "Tamaño de letra"],
+  "字体颜色": ["Text color", "Color del texto"],
+  "背景颜色": ["Page color", "Color de fondo"],
+  "停止时间": ["Stop at", "Parar a las"],
+  "本地笔记": ["Local notes", "Notas locales"],
+  "写下笔记": ["Write a note", "Escribe una nota"],
+  "保存": ["Save", "Guardar"],
+  "正在处理书籍，请稍候": [
+    "Processing a book. Please wait.",
+    "Procesando un libro. Espera un momento.",
+  ],
+  "正在更新公版书目录": [
+    "Updating public-domain catalog",
+    "Actualizando catálogo público",
+  ],
+  "更新未完成，仍可浏览已缓存目录": [
+    "Update incomplete. Cached catalog is still available.",
+    "Actualización incompleta. El catálogo en caché sigue disponible.",
+  ],
+  "正在获取下载地址": ["Finding download link", "Buscando enlace de descarga"],
+  "正在导入本地书架": ["Adding to your library", "Añadiendo a tu biblioteca"],
+  "另一文件正在下载，请稍后重试": [
+    "Another file is downloading. Please retry shortly.",
+    "Se está descargando otro archivo. Inténtalo de nuevo en breve.",
+  ],
+  "同一书库使用一个主云；连接其他云会切换同步来源。\n自动同步每天最多一次，读听期间延后执行；也可手动立即同步。应用关闭期间的执行时机由系统决定。": [
+    "One cloud is active for your library. Connecting another switches the source.\nAutomatic sync runs at most once a day and is deferred while reading or listening. You can also sync manually. Background timing is controlled by the operating system.",
+    "Una nube está activa para tu biblioteca. Conectar otra cambia la fuente.\nLa sincronización automática se realiza como máximo una vez al día y se pospone mientras lees o escuchas. También puedes sincronizar manualmente. El sistema controla los horarios en segundo plano.",
+  ],
+
   "听书语音": ["Listening voice", "Voz de lectura"],
   "语音引擎": ["Speech engine", "Motor de voz"],
   "系统自带 TTS": ["System TTS", "TTS del sistema"],

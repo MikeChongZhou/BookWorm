@@ -26,9 +26,13 @@ import 'cloud/icloud_provider.dart';
 import 'cloud/library_sync.dart';
 import 'screens/reader_screen.dart';
 import 'screens/about_screen.dart';
+import 'audio/book_audio_handler.dart';
+import 'downloads/book_catalog.dart';
+import 'screens/downloads_screen.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await BookAudioHandler.initialize();
   LicenseRegistry.addLicense(() async* {
     yield LicenseEntryWithLineBreaks([
       'MeloTTS model · MyShell.ai',
@@ -39,7 +43,8 @@ void main() {
 
 class ReaderApp extends StatefulWidget {
   final LocalLibrary? library;
-  const ReaderApp({super.key, this.library});
+  final List<CloudProvider>? cloudProviders;
+  const ReaderApp({super.key, this.library, this.cloudProviders});
   @override
   State<ReaderApp> createState() => _ReaderAppState();
 }
@@ -85,7 +90,10 @@ class _ReaderAppState extends State<ReaderApp> {
           fontFamilyFallback: const ['PingFang SC', 'Microsoft YaHei'],
         ),
         home: ready
-            ? LibraryScreen(library: widget.library)
+            ? LibraryScreen(
+                library: widget.library,
+                cloudProviders: widget.cloudProviders,
+              )
             : const Scaffold(body: Center(child: CircularProgressIndicator())),
       ),
     ),
@@ -94,7 +102,8 @@ class _ReaderAppState extends State<ReaderApp> {
 
 class LibraryScreen extends StatefulWidget {
   final LocalLibrary? library;
-  const LibraryScreen({super.key, this.library});
+  final List<CloudProvider>? cloudProviders;
+  const LibraryScreen({super.key, this.library, this.cloudProviders});
   @override
   State<LibraryScreen> createState() => _LibraryScreenState();
 }
@@ -160,13 +169,101 @@ class _LibraryScreenState extends State<LibraryScreen>
 
   Widget settingsPanel() =>
       SettingsPanel(openCloud: openCloud, openAbout: openAbout);
+  Widget miniPlayer(bool wide, Widget? navigation) {
+    final handler = BookAudioHandler.instance;
+    if (handler == null) return navigation ?? const SizedBox.shrink();
+    return StreamBuilder(
+      stream: handler.playbackState,
+      builder: (context, snapshot) {
+        final p = handler.player;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (p != null && p.ready && !p.disposed)
+              Material(
+                color: Theme.of(context).colorScheme.surfaceContainerLow,
+                child: SafeArea(
+                  top: false,
+                  bottom: wide,
+                  child: ListTile(
+                    leading: const Icon(Icons.headphones_outlined),
+                    title: Text(
+                      p.book.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      p.book.sections[p.book.section].title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () =>
+                        openBook(p.book, listen: true, autoPlay: false),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: t(p.playing || p.buffering ? '暂停听书' : '播放'),
+                          icon: Icon(
+                            p.playing || p.buffering
+                                ? Icons.pause
+                                : Icons.play_arrow,
+                          ),
+                          onPressed: () async {
+                            if (p.playing || p.buffering) {
+                              await handler.pause();
+                              unawaited(dailySync());
+                              if (catalog.deferred) {
+                                unawaited(catalog.refreshDaily());
+                              }
+                            } else {
+                              await handler.play();
+                            }
+                          },
+                        ),
+                        IconButton(
+                          tooltip: t('关闭听书'),
+                          icon: const Icon(Icons.close),
+                          onPressed: () async {
+                            await handler.stop();
+                            await handler.detach(p);
+                            p.dispose();
+                            unawaited(dailySync());
+                            if (catalog.deferred) {
+                              unawaited(catalog.refreshDaily());
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ?navigation,
+          ],
+        );
+      },
+    );
+  }
+
   Widget syncStatusBar() => Semantics(
     liveRegion: true,
     child: Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       color: Theme.of(context).colorScheme.surfaceContainerLow,
-      child: Text(status, style: Theme.of(context).textTheme.bodySmall),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(status, style: Theme.of(context).textTheme.bodySmall),
+          ),
+          if (hasRemotePositions)
+            TextButton(
+              onPressed: busy || consuming ? null : () => sync(),
+              child: Text(t('检查其他设备进度')),
+            ),
+        ],
+      ),
     ),
   );
   bool aboutOpen = false;
@@ -195,30 +292,44 @@ class _LibraryScreenState extends State<LibraryScreen>
   String status = '';
   String query = '';
   bool busy = false, loading = true, reading = false;
+  bool syncing = false;
+  bool checkingDailySync = false;
+  bool deferredCloudSync = false;
+  bool hasRemotePositions = false;
+  String? openingBook;
+  bool get consuming =>
+      reading ||
+      (BookAudioHandler.instance?.player?.playing ?? false) ||
+      (BookAudioHandler.instance?.player?.buffering ?? false);
   int tab = 0;
   SharedPreferences? prefs;
   String device = '';
   Timer? autoSync;
-  final providers = <CloudProvider>[
-    OneDriveProvider.production(),
-    if (Platform.isIOS || Platform.isMacOS)
-      NativeICloudProvider.production()
-    else
-      ICloudProvider.production(),
-    GoogleDriveProvider.production(),
-  ];
+  final catalog = BookCatalog();
+  late final providers =
+      widget.cloudProviders ??
+      <CloudProvider>[
+        OneDriveProvider.production(),
+        if (Platform.isIOS || Platform.isMacOS)
+          NativeICloudProvider.production()
+        else
+          ICloudProvider.production(),
+        GoogleDriveProvider.production(),
+      ];
   CloudProvider? active;
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    catalog.shouldYield = () => consuming;
     appMenu.setMethodCallHandler((call) async {
       if (call.method == 'showAbout') unawaited(openAbout());
       if (call.method == 'showSettings') unawaited(openSettings());
     });
     unawaited(load());
-    autoSync = Timer.periodic(Duration(minutes: 1), (_) {
-      if (active != null && !reading && !busy) unawaited(sync());
+    autoSync = Timer.periodic(const Duration(hours: 1), (_) {
+      unawaited(dailySync());
+      if (!consuming) unawaited(catalog.refreshDaily());
     });
   }
 
@@ -226,6 +337,7 @@ class _LibraryScreenState extends State<LibraryScreen>
   void dispose() {
     appMenu.setMethodCallHandler(null);
     autoSync?.cancel();
+    catalog.dispose();
     revision.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -237,7 +349,7 @@ class _LibraryScreenState extends State<LibraryScreen>
         active != null &&
         !reading &&
         !busy) {
-      unawaited(sync());
+      unawaited(dailySync());
     }
   }
 
@@ -254,6 +366,7 @@ class _LibraryScreenState extends State<LibraryScreen>
       await prefs!.setString('bookworm_device', device);
       store = widget.library ?? await LocalLibrary.open();
       books = await store!.load();
+      if (widget.library == null) unawaited(catalog.refreshDaily());
       final cloudName = prefs!.getString('bookworm_cloud');
       active = providers
           .where((p) => p.name == cloudName && p.configured)
@@ -264,7 +377,7 @@ class _LibraryScreenState extends State<LibraryScreen>
     }
     if (mounted) {
       update(() => loading = false);
-      if (active != null) unawaited(sync());
+      if (active != null) unawaited(dailySync());
     }
   }
 
@@ -324,17 +437,30 @@ class _LibraryScreenState extends State<LibraryScreen>
         });
       }
     }
-    if (active != null) unawaited(sync());
+    if (active != null) unawaited(dailySync());
   }
 
-  Future<void> openBook(LocalBook book, {bool listen = false}) async {
-    if (busy || store == null) return;
+  Future<void> openBook(
+    LocalBook book, {
+    bool listen = false,
+    bool autoPlay = true,
+  }) async {
+    if (store == null || openingBook != null || reading) return;
+    if (busy && !syncing) {
+      toast(t('正在处理书籍，请稍候'));
+      return;
+    }
+    update(() => openingBook = book.id);
+    final current = BookAudioHandler.instance?.player;
+    if (current != null && current.book.id == book.id) book = current.book;
     reading = true;
     try {
+      await WidgetsBinding.instance.endOfFrame;
       final bytes = book.format == 'pdf'
           ? await store!.readSource(book.id)
           : null;
       if (!mounted) return;
+      update(() => openingBook = null);
       await Navigator.push(
         context,
         MaterialPageRoute(
@@ -342,6 +468,7 @@ class _LibraryScreenState extends State<LibraryScreen>
             book: book,
             source: bytes,
             listen: listen,
+            autoPlay: listen && autoPlay,
             persist: () => store!.save(book),
           ),
         ),
@@ -351,26 +478,72 @@ class _LibraryScreenState extends State<LibraryScreen>
       toast(t('无法打开书籍：$e'));
     } finally {
       reading = false;
+      if (mounted) update(() => openingBook = null);
     }
-    if (active != null) unawaited(sync());
+    if (catalog.deferred && !consuming) unawaited(catalog.refreshDaily());
+    if (active != null) unawaited(dailySync());
   }
 
-  Future<void> sync() async {
+  Future<void> dailySync() async {
+    final cloud = active;
+    if (cloud == null ||
+        busy ||
+        consuming ||
+        prefs == null ||
+        checkingDailySync) {
+      return;
+    }
+    checkingDailySync = true;
+    try {
+      final day = DateTime.now().toIso8601String().substring(0, 10);
+      final key = 'bookworm_sync_day_${cloud.name}';
+      if (prefs!.getString(key) == day && !deferredCloudSync) return;
+      // Record the attempt to prevent failed/offline accounts retrying continuously.
+      await prefs!.setString(key, day);
+      deferredCloudSync = false;
+      if (active == cloud) await sync(automatic: true);
+    } finally {
+      checkingDailySync = false;
+    }
+  }
+
+  Future<void> sync({bool automatic = false}) async {
+    if (consuming) {
+      update(() => status = t('同步已延后，优先读书与听书'));
+      return;
+    }
     final cloud = active;
     if (cloud == null || busy || reading || store == null) return;
     update(() {
       busy = true;
+      syncing = true;
       status = t('连接 ${cloud.name}');
     });
     try {
       final result = await LibrarySync(store!, device).run(
         cloud,
+        yieldRequested: () => consuming,
         status: (s) {
           if (mounted) update(() => status = t(s));
         },
       );
+      deferredCloudSync = result.deferred;
+      if (result.deferred) {
+        await prefs?.remove('bookworm_sync_day_${cloud.name}');
+      }
+      if (reading) {
+        update(
+          () => status = t(
+            result.deferred
+                ? '同步已延后，优先读书与听书'
+                : '同步完成：已上传 ${result.uploaded} 个文件，已下载 ${result.downloaded} 个文件',
+          ),
+        );
+        return;
+      }
       await refresh();
       for (final remote in result.positions) {
+        if (automatic) break;
         if (!mounted) break;
         final b = books.where((b) => b.id == remote.bookId).firstOrNull;
         if (b == null) continue;
@@ -404,16 +577,31 @@ class _LibraryScreenState extends State<LibraryScreen>
         }
         if (use != null) await prefs?.setInt(acknowledgement, remote.modified);
       }
+      hasRemotePositions = result.positions.any(
+        (remote) =>
+            books.any((book) => book.id == remote.bookId) &&
+            (prefs?.getInt(
+                      'sync_ack_${cloud.name}_${remote.bookId}_${remote.device}',
+                    ) ??
+                    -1) <
+                remote.modified,
+      );
       await refresh();
       await prefs?.setString(
         'bookworm_last_sync',
         DateTime.now().toIso8601String(),
       );
+      await prefs?.setString(
+        'bookworm_sync_day_${cloud.name}',
+        DateTime.now().toIso8601String().substring(0, 10),
+      );
       if (mounted) {
         update(
-          () => status = t(
-            '同步完成：已上传 ${result.uploaded} 个文件，已下载 ${result.downloaded} 个文件',
-          ),
+          () => status =
+              t(
+                '同步完成：已上传 ${result.uploaded} 个文件，已下载 ${result.downloaded} 个文件',
+              ) +
+              (hasRemotePositions ? ' · ${t('有其他设备进度，可手动查看')}' : ''),
         );
       }
     } catch (e) {
@@ -422,6 +610,7 @@ class _LibraryScreenState extends State<LibraryScreen>
       if (mounted) {
         update(() {
           busy = false;
+          syncing = false;
         });
       }
     }
@@ -474,6 +663,13 @@ class _LibraryScreenState extends State<LibraryScreen>
     );
     if (yes == true) {
       try {
+        final handler = BookAudioHandler.instance;
+        final current = handler?.player;
+        if (current != null && current.book.id == book.id) {
+          await handler!.stop();
+          await handler.detach(current);
+          current.dispose();
+        }
         await store!.remove(book);
         await refresh();
       } catch (e) {
@@ -558,7 +754,9 @@ class _LibraryScreenState extends State<LibraryScreen>
         ),
       SizedBox(height: 24),
       Text(
-        t('同一书库使用一个主云；连接其他云会切换同步来源。\nApp 打开时、读听返回书架后与停留书架期间会尝试同步。后台同步时机由系统决定。'),
+        t(
+          '同一书库使用一个主云；连接其他云会切换同步来源。\n自动同步每天最多一次，读听期间延后执行；也可手动立即同步。应用关闭期间的执行时机由系统决定。',
+        ),
         style: TextStyle(color: Colors.grey),
       ),
       if (prefs?.getString('bookworm_last_sync') != null)
@@ -600,6 +798,10 @@ class _LibraryScreenState extends State<LibraryScreen>
                   NavigationRailDestination(
                     icon: Icon(Icons.headphones_outlined),
                     label: Text(t('听书')),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.download_outlined),
+                    label: Text(t('下载')),
                   ),
                   NavigationRailDestination(
                     icon: Icon(Icons.settings_outlined),
@@ -666,6 +868,21 @@ class _LibraryScreenState extends State<LibraryScreen>
                       ],
                     ),
                   ),
+                  if (openingBook != null)
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(t('正在打开书籍…')),
+                        ],
+                      ),
+                    ),
                   if (status.isNotEmpty) syncStatusBar(),
                   if (error != null)
                     MaterialBanner(
@@ -684,14 +901,26 @@ class _LibraryScreenState extends State<LibraryScreen>
                       ],
                     ),
                   Expanded(
-                    child: loading
+                    child: tab == 2
+                        ? DownloadsPanel(
+                            catalog: catalog,
+                            library: store,
+                            imported: (book) {
+                              books = [
+                                book,
+                                ...books.where((b) => b.id != book.id),
+                              ];
+                              if (mounted) update(() {});
+                            },
+                          )
+                        : loading
                         ? Center(child: CircularProgressIndicator())
                         : ListView(
                             padding: EdgeInsets.symmetric(
                               horizontal: wide ? 40 : 20,
                               vertical: 20,
                             ),
-                            children: tab == 2
+                            children: tab == 3
                                 ? [settingsPanel()]
                                 : [
                                     Text(
@@ -947,26 +1176,33 @@ class _LibraryScreenState extends State<LibraryScreen>
           ],
         ),
       ),
-      bottomNavigationBar: wide
-          ? null
-          : NavigationBar(
-              selectedIndex: tab,
-              onDestinationSelected: (v) => update(() => tab = v),
-              destinations: [
-                NavigationDestination(
-                  icon: Icon(Icons.menu_book_outlined),
-                  label: t('书架'),
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.headphones_outlined),
-                  label: t('听书'),
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.settings_outlined),
-                  label: t('设置'),
-                ),
-              ],
-            ),
+      bottomNavigationBar: miniPlayer(
+        wide,
+        wide
+            ? null
+            : NavigationBar(
+                selectedIndex: tab,
+                onDestinationSelected: (v) => update(() => tab = v),
+                destinations: [
+                  NavigationDestination(
+                    icon: Icon(Icons.menu_book_outlined),
+                    label: t('书架'),
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.headphones_outlined),
+                    label: t('听书'),
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.download_outlined),
+                    label: t('下载'),
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.settings_outlined),
+                    label: t('设置'),
+                  ),
+                ],
+              ),
+      ),
     );
   }
 }
