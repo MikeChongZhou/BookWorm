@@ -86,3 +86,13 @@
 指定账号已开通 Azure 免费账号及默认 Entra 目录；BookWorm OneDrive 原生应用注册、个人账号类型、双回调和两项最小委托权限均已完成。没有复用 STG 身份或数据，没有创建虚拟机／存储账户等 Azure 资源。
 
 macOS 真实 OneDrive 登录与示例书同步成功，重启后再次同步成功；原有 Google／iCloud 配置保留。macOS 与 iOS 1.0.3 (4) 签名安装包已生成，22 项回归测试通过。跨设备下载及阅读续接、iPhone／Android／Windows 实机云授权仍未验收。截图见 dist/BookWorm-1.0.3-onedrive-connected.png。
+
+## 2026-11-15 / 1.0.4 · Melo 与同步状态
+
+- 设置新增系统自带 TTS / MeloTTS 二选一，本机持久化；默认仍为系统。Melo 选择时下载官方 sherpa ONNX 中文／英文资源（167,006,755 bytes），固定 SHA-256 校验、文件流解压、临时目录安装后提交；失败保留系统选项并可重试。
+- 四端使用 sherpa_onnx 2.0.1 + audioplayers 6.8.1，本地 CPU 推理在长驻 isolate 中运行。80 字以内片段、下一片段预生成、临时 WAV 播放与退出清理；音频不上传私人云。Melo 无逐字时间戳，暂停按当前片段起点续播，可能重读；系统语音继续使用系统回调位置。
+- 同步移除不定进度条与完成弹出提示，在状态条展示上传／下载的完整书籍文件数、阅读进度处理及最终状态；底层 part/manifest/position 不计为用户文件数。损坏或失败文件不递增成功计数。
+- MIT 模型版权与许可原文随 App 打包，第三方许可证页面可查看。模型包自身 LICENSE 同样保留。
+- Windows 已接入共用实现与原生依赖，现有 GitHub Actions Windows 构建保留；本机无 Windows 编译环境，不能声称 Windows 实机验收。手机音频中断、后台／锁屏与实际性能仍需设备验收。
+
+1.0.4 验证结果：最终静态分析无问题，22 项常规测试通过；大模型原生测试单独运行通过。macOS Release 编译、Developer ID 签名与 strict 验签通过；真实 App 完成模型联网下载／校验／安装，示例书显示正常播放及暂停，无语音错误；实际云同步完成为纯文字状态。iOS 模拟器与 development IPA、Android debug APK 编译通过。三个版本化产物和 SHA-256 清单位于 dist/BookWorm-1.0.4-*。macOS 未公证，iOS 仅登记设备，Android 为调试签名；Windows 本轮未编译，未上传本轮源码到 GitHub。

@@ -34,13 +34,14 @@ class LibrarySync {
     void Function(String)? status,
   }) async {
     final result = SyncResult();
+    status?.call('正在检查私人云文件');
     final known = (await cloud.list()).toSet();
     var local = await library.load();
     // Immutable content chunks are committed by publishing the manifest LAST.
     for (final book in local) {
       final key = 'book-${book.id}.manifest';
       if (!known.contains(key)) {
-        status?.call('上传 ${book.title}');
+        status?.call('上传本地文件中，已上传 ${result.uploaded} 个文件');
         final source = await library.readSource(book.id);
         final metadata = book.toJson()
           ..['section'] = 0
@@ -75,6 +76,7 @@ class LibrarySync {
         );
         known.add(key);
         result.uploaded++;
+        status?.call('上传本地文件中，已上传 ${result.uploaded} 个文件');
       }
       await cloud.write(
         'position-${book.id}-$deviceId.json',
@@ -98,7 +100,7 @@ class LibrarySync {
         throw const CloudFailure('云书籍标识不匹配');
       }
       if (localIds.contains(id)) continue;
-      status?.call('下载私人书籍');
+      status?.call('下载本地文件中，已下载 ${result.downloaded} 个文件');
       final parts = manifest['parts'] as List;
       if (parts.length > 1000) throw const CloudFailure('云文件块数过多');
       final builder = BytesBuilder(copy: false);
@@ -131,8 +133,10 @@ class LibrarySync {
       await library.save(book);
       localIds.add(id);
       result.downloaded++;
+      status?.call('下载本地文件中，已下载 ${result.downloaded} 个文件');
     }
     local = await library.load();
+    status?.call('正在同步阅读进度');
     final map = {for (final b in local) b.id: b};
     for (final key in keys.where(
       (k) => RegExp(r'^position-[a-f0-9]{64}-[a-f0-9]+\.json$').hasMatch(k),

@@ -13,6 +13,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -28,6 +29,11 @@ import 'screens/about_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks([
+      'MeloTTS model · MyShell.ai',
+    ], await rootBundle.loadString('assets/licenses/melo.txt'));
+  });
   runApp(const ReaderApp());
 }
 
@@ -119,7 +125,7 @@ class _LibraryScreenState extends State<LibraryScreen>
               body: ListView(
                 padding: const EdgeInsets.all(24),
                 children: [
-                  if (busy) ...[const LinearProgressIndicator(), Text(status)],
+                  if (status.isNotEmpty) syncStatusBar(),
                   cloudPanel(),
                 ],
               ),
@@ -154,6 +160,15 @@ class _LibraryScreenState extends State<LibraryScreen>
 
   Widget settingsPanel() =>
       SettingsPanel(openCloud: openCloud, openAbout: openAbout);
+  Widget syncStatusBar() => Semantics(
+    liveRegion: true,
+    child: Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      child: Text(status, style: Theme.of(context).textTheme.bodySmall),
+    ),
+  );
   bool aboutOpen = false;
   Future<void> openAbout() async {
     if (!mounted || aboutOpen) return;
@@ -395,15 +410,18 @@ class _LibraryScreenState extends State<LibraryScreen>
         DateTime.now().toIso8601String(),
       );
       if (mounted) {
-        toast(t('同步完成：上传 ${result.uploaded} 本，下载 ${result.downloaded} 本'));
+        update(
+          () => status = t(
+            '同步完成：已上传 ${result.uploaded} 个文件，已下载 ${result.downloaded} 个文件',
+          ),
+        );
       }
     } catch (e) {
-      toast(t('同步未完成：$e；本机书籍已保留'));
+      if (mounted) update(() => status = t('同步未完成：$e；本机书籍已保留'));
     } finally {
       if (mounted) {
         update(() {
           busy = false;
-          status = '';
         });
       }
     }
@@ -648,10 +666,7 @@ class _LibraryScreenState extends State<LibraryScreen>
                       ],
                     ),
                   ),
-                  if (busy) ...[
-                    LinearProgressIndicator(),
-                    Padding(padding: EdgeInsets.all(8), child: Text(status)),
-                  ],
+                  if (status.isNotEmpty) syncStatusBar(),
                   if (error != null)
                     MaterialBanner(
                       content: Text(t(error!)),

@@ -37,3 +37,9 @@ OneDrive 未注入配置：指定开发者账号缺少 Entra 目录，等待用�
 本机 cloud-config.apple/android/windows.json 已注入独立 OneDrive 原生客户端 ID；仅书虫 app folder 与 offline_access。真实 macOS 验证：登录成功、示例书同步成功、正常退出并重开后恢复来源、再次同步 0 上传／0 下载且更新成功时间。
 
 产物：dist/BookWorm-1.0.3-macOS.zip（Developer ID 严格签名，嵌入专属 iCloud 描述文件，未公证）；dist/BookWorm-1.0.3-iOS-development.ipa（仅描述文件登记设备，未上架）。两个平台编译通过，22 项测试通过。iPhone、Android、Windows 真实登录与双设备传书／进度续接尚未验收；不把桌面验证当成四端完成。
+
+### Melo 实际原生测试
+
+常规 `flutter test` 不下载大模型；`test/melo_native_test.dart` 默认跳过。使用已下载的官方 tar.bz2，通过 `BOOKWORM_MELO_ARCHIVE` 指定绝对路径、`BOOKWORM_SHERPA_LIB` 指定 sherpa_onnx_macos 包内 `macos` 根目录，再执行 `flutter test test/melo_native_test.dart`。覆盖文件流安装、长驻 isolate 内真实合成、WAV 头／长度及释放。初次错误传入 dylib 文件路径已纠正为库根目录，随后真实测试通过。
+
+Melo 下载压缩包约 167 MB，安装约 191 MB；解压时临时文件会额外占用磁盘。模型采用固定 SHA-256；下载失败重新下载，不使用未完成安装。模型不加入 Git，也不随私人书库同步。

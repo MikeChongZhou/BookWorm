@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/local_book.dart';
 import '../audio/reading_player.dart';
+import '../audio/melo_speech.dart';
 
 class ReaderScreen extends StatefulWidget {
   final LocalBook book;
@@ -44,7 +45,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     scroll.addListener(trackScroll);
-    player = ReadingPlayer(book, DeviceSpeech(), widget.persist)
+    player = ReadingPlayer(book, SelectedSpeech(), widget.persist)
       ..addListener(changed);
     unawaited(settings());
     restoreTextPosition();

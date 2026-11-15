@@ -16,6 +16,15 @@ abstract class SpeechEngine {
   void progress(void Function(int start, int end) callback);
 }
 
+abstract interface class SpeechResources {
+  Future<void> close();
+}
+
+abstract interface class NextSpeech {
+  int get chunkLimit;
+  void nextText(String? text);
+}
+
 class DeviceSpeech implements SpeechEngine {
   final FlutterTts tts = FlutterTts();
   Completer<void>? _failure;
@@ -118,8 +127,8 @@ class ReadingPlayer extends ChangeNotifier {
     ready = true;
   }
 
-  static int chunkEnd(String text, int start) {
-    var end = (start + 180).clamp(0, text.length);
+  static int chunkEnd(String text, int start, [int limit = 180]) {
+    var end = (start + limit).clamp(0, text.length);
     if (end < text.length) {
       final cut = text.lastIndexOf(RegExp(r'[。！？；.!?\n]'), end - 1);
       if (cut > start + 30) end = cut + 1;
@@ -152,10 +161,19 @@ class ReadingPlayer extends ChangeNotifier {
           notifyListeners();
           continue;
         }
-        final start = book.offset, end = chunkEnd(text, start);
+        final limit = engine is NextSpeech
+            ? (engine as NextSpeech).chunkLimit
+            : 180;
+        final start = book.offset, end = chunkEnd(text, start, limit);
         _base = start;
         _spokenSection = index;
         final utterance = text.substring(start, end);
+        if (engine is NextSpeech) {
+          final next = end < text.length
+              ? text.substring(end, chunkEnd(text, end, limit))
+              : null;
+          (engine as NextSpeech).nextText(next);
+        }
         if (utterance.trim().isNotEmpty) await engine.speak(utterance);
         if (generation != _generation || disposed) return;
         book.locate(index, end);
@@ -228,7 +246,11 @@ class ReadingPlayer extends ChangeNotifier {
     playing = false;
     _generation++;
     _sleep?.cancel();
-    unawaited(engine.stop());
+    if (engine is SpeechResources) {
+      unawaited((engine as SpeechResources).close());
+    } else {
+      unawaited(engine.stop());
+    }
     super.dispose();
   }
 }

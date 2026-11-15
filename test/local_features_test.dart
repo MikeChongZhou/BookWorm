@@ -182,8 +182,17 @@ void main() {
     await sa.source(book.id, source);
     await sa.save(book);
     final cloud = MemoryCloud();
-    await LibrarySync(sa, 'aaaa').run(cloud);
-    final result = await LibrarySync(sb, 'bbbb').run(cloud);
+    final uploadStatus = <String>[];
+    await LibrarySync(sa, 'aaaa').run(cloud, status: uploadStatus.add);
+    expect(uploadStatus, contains('上传本地文件中，已上传 0 个文件'));
+    expect(uploadStatus, contains('上传本地文件中，已上传 1 个文件'));
+    final downloadStatus = <String>[];
+    final result = await LibrarySync(
+      sb,
+      'bbbb',
+    ).run(cloud, status: downloadStatus.add);
+    expect(downloadStatus, contains('下载本地文件中，已下载 0 个文件'));
+    expect(downloadStatus, contains('下载本地文件中，已下载 1 个文件'));
     expect(result.downloaded, 1);
     expect(
       sha256.convert(await sb.readSource(book.id)),

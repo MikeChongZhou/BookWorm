@@ -51,6 +51,31 @@ class _StringsDelegate extends LocalizationsDelegate<AppStrings> {
 }
 
 const dynamicTranslations = <String, List<String>>{
+  r"^上传本地文件中，已上传 (\d+) 个文件$": [
+    "Uploading local files · {1} files uploaded",
+    "Subiendo archivos locales · {1} archivos subidos",
+  ],
+  r"^下载本地文件中，已下载 (\d+) 个文件$": [
+    "Downloading local files · {1} files downloaded",
+    "Descargando archivos locales · {1} archivos descargados",
+  ],
+  r"^同步完成：已上传 (\d+) 个文件，已下载 (\d+) 个文件$": [
+    "Sync complete · {1} uploaded, {2} downloaded",
+    "Sincronización completa · {1} subidos, {2} descargados",
+  ],
+  r"^语音设置失败：(.+)$": [
+    "Speech settings failed: {1}",
+    "Error de configuración de voz: {1}",
+  ],
+  r"^下载 Melo 模型中：(\d+)%$": [
+    "Downloading Melo model: {1}%",
+    "Descargando modelo Melo: {1}%",
+  ],
+  r"^校验并安装 Melo 模型中：(\d+)%$": [
+    "Verifying and installing Melo: {1}%",
+    "Verificando e instalando Melo: {1}%",
+  ],
+
   r'^版本 (.+)$': ['Version {1}', 'Versión {1}'],
   r'^开发者：(.+)$': ['Developer: {1}', 'Desarrollador: {1}'],
   r'^版权所有 © (.+)$': ['Copyright © {1}', 'Derechos de autor © {1}'],

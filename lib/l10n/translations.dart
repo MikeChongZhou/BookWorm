@@ -1,4 +1,30 @@
 const translations = <String, List<String>>{
+  "听书语音": ["Listening voice", "Voz de lectura"],
+  "语音引擎": ["Speech engine", "Motor de voz"],
+  "系统自带 TTS": ["System TTS", "TTS del sistema"],
+  "系统语音使用设备已安装的音色。Melo 首次需下载约 167 MB，安装后可离线听书。": [
+    "System TTS uses installed voices. Melo requires a 167 MB download, then works offline.",
+    "El TTS del sistema usa las voces instaladas. Melo requiere descargar 167 MB y luego funciona sin conexión.",
+  ],
+  "Melo 暂按语音片段续播，暂停后可能重读当前片段；不提供逐字时间对齐。": [
+    "Melo resumes at the start of the current audio segment and may repeat it after pausing. Word timestamps are unavailable.",
+    "Melo reanuda al inicio del segmento actual y puede repetirlo tras una pausa. No hay marcas de tiempo por palabra.",
+  ],
+  "Melo 离线模型已安装": ["Melo offline model installed", "Modelo Melo instalado"],
+  "Melo 离线模型未安装": [
+    "Melo offline model not installed",
+    "Modelo Melo no instalado",
+  ],
+  "下载 Melo 离线模型": ["Download Melo offline model", "Descargar modelo Melo"],
+  "正在检查私人云文件": [
+    "Checking private cloud files",
+    "Comprobando archivos en la nube privada",
+  ],
+  "正在同步阅读进度": [
+    "Syncing reading positions",
+    "Sincronizando posiciones de lectura",
+  ],
+
   '无法保存语言设置，请重试': [
     'Could not save language. Please retry.',
     'No se pudo guardar el idioma. Reintenta.',
