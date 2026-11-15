@@ -1,6 +1,6 @@
 # BookWorm 私人云接入配置
 
-当前三种连接器已写入代码，但仓库没有真实开发者应用配置；默认安装包的云登录显示未配置。**未做真实账户登录或四端同步验收，不能把模拟云测试当成已接通云盘。**
+1.0.3 本机签名 Apple 安装包已注入三家云配置，macOS 已完成 OneDrive、Google Drive、原生 iCloud 真实连接。OneDrive 与 Google Drive 已使用原创示例书验证同步；四端跨设备书籍／进度仍未验收。源码及 CI 默认不携带本机配置，不应把未注入参数的构建当成云已启用的安装包。
 
 书籍按用户要求普通文件保存；仅 OAuth／CloudKit 用户令牌使用系统安全存储，不做书籍加密。内容从 App 直达用户私人云，无书虫中转服务器。
 
@@ -57,3 +57,13 @@
 - Android 注册当前只匹配本机 debug 签名；正式商店签名／其他开发机必须单独登记 SHA-1。Windows 构建需要本机桌面配置，尚未在 Windows 主机实测。
 - Microsoft 指定账号 `mike.castlepines@gmail.com` 没有 Entra 目录，禁止目录外新注册；另一个账号虽有目录，用户选择不使用。等待用户用指定账号开通 Azure／Entra，之后再新建独立 BookWorm 应用。不得借用 STG client ID 假装解决。
 - macOS 已成功连接原生 iCloud，完成空书库同步；双端书籍和进度传递尚未验收。Google 真实账号授权验证见构建记录的后续结果。
+
+## 1.0.3 OneDrive 已接通（2026-11-15）
+
+用户完成 Azure 免费开户后，已核验 mike.castlepines@gmail.com 的默认 Entra 目录。经用户确认 Microsoft Platform Policies，注册独立 BookWorm 个人账号原生客户端。公开 client ID：`2f7a07ae-baa4-4b41-b564-e03dbce9d285`（是应用标识，不是客户端密钥）。
+
+- 原生回调 `bookworm://oauth`，Windows 回调 `http://localhost:43821/`，均登记为 Mobile and desktop applications。
+- 仅配置 delegated `Files.ReadWrite.AppFolder`、`offline_access`；已移除自动添加的 `User.Read`。不创建 client secret，不申请所有文件或后台应用权限。
+- 三份本机端别 cloud-config 文件均加入 `ONEDRIVE_CLIENT_ID`；配置不入 Git，登录令牌仅由系统安全存储保存。
+- macOS 1.0.3 实际登录成功，当前书库只有仓库原创示例书；同步成功，重启后恢复 OneDrive，再次同步显示 0 上传／0 下载并更新成功时间。未读取或改动旧版私人书库。
+- iOS 包已签名构建；Android／Windows 配置已准备，未据此宣称三端登录或四端传书验收完成。

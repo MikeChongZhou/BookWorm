@@ -80,3 +80,9 @@
 - 用户指定 OneDrive 注册必须使用 mike.castlepines@gmail.com，该账号无 Entra 目录；另一个 Microsoft 账号虽有 Default Directory，用户未同意用它注册书虫。等待指定账号完成 Azure／Entra 开通，不借用 STG client ID。
 - 用户确认新包标识 com.fairyphoenix.bookworm；旧包标识被 Apple 拒绝注册，新旧应用并存，旧本地书库需另行迁移／重导入。
 - 后续真实 Google 验证：成功授权并完成原创示例书导入后的同步，自动同步随后继续成功。示例保留，未操作旧版私人书籍；另一设备下载与位置续接仍需验收。
+
+## 2026-11-15 / 1.0.3
+
+指定账号已开通 Azure 免费账号及默认 Entra 目录；BookWorm OneDrive 原生应用注册、个人账号类型、双回调和两项最小委托权限均已完成。没有复用 STG 身份或数据，没有创建虚拟机／存储账户等 Azure 资源。
+
+macOS 真实 OneDrive 登录与示例书同步成功，重启后再次同步成功；原有 Google／iCloud 配置保留。macOS 与 iOS 1.0.3 (4) 签名安装包已生成，22 项回归测试通过。跨设备下载及阅读续接、iPhone／Android／Windows 实机云授权仍未验收。截图见 dist/BookWorm-1.0.3-onedrive-connected.png。

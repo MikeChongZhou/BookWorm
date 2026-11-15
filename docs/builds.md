@@ -31,3 +31,9 @@ macOS 带 iCloud 权限后，先 `flutter build macos --release --config-only --
 OneDrive 未注入配置：指定开发者账号缺少 Entra 目录，等待用户开通。Google 安装包目前使用独立项目的测试状态，其他读者不自动获得测试用户资格。
 
 补充真实 Google 验证：用户确认应用专用目录授权后，macOS SDK 成功完成登录；导入仓库原创 `samples/本地读听示例.txt` 后同步完成，后续自动同步仍成功。该示例保留在新版书库中，不涉及旧版私人书籍。尚未以另一设备验证下载／进度续接。证明截图：`dist/BookWorm-1.0.2-settings.png`、`dist/BookWorm-1.0.2-cloud-connected.png`、`dist/BookWorm-1.0.2-google-sync.png`。
+
+## 1.0.3 (4) — OneDrive 接入
+
+本机 cloud-config.apple/android/windows.json 已注入独立 OneDrive 原生客户端 ID；仅书虫 app folder 与 offline_access。真实 macOS 验证：登录成功、示例书同步成功、正常退出并重开后恢复来源、再次同步 0 上传／0 下载且更新成功时间。
+
+产物：dist/BookWorm-1.0.3-macOS.zip（Developer ID 严格签名，嵌入专属 iCloud 描述文件，未公证）；dist/BookWorm-1.0.3-iOS-development.ipa（仅描述文件登记设备，未上架）。两个平台编译通过，22 项测试通过。iPhone、Android、Windows 真实登录与双设备传书／进度续接尚未验收；不把桌面验证当成四端完成。

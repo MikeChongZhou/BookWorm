@@ -10,7 +10,7 @@
 - 普通文件持久化、原件保留、重复检测、旧原型数据迁移；异常文件保留并报错。
 - OneDrive／Google Drive／iCloud 连接器、分块校验同步和跨设备进度选择，已接入界面。
 
-**1.0.2 云配置**：本机签名 Apple 安装包已注入独立 Google 登录配置与原生 iCloud 容器，两者在 macOS 已完成真实账号连接及空书库同步。OneDrive 等待指定账号开通 Entra。仓库和 CI 不含本机云配置，跨设备书籍／进度尚未验收。[云接入说明](docs/cloud-setup.md)
+**1.0.3 云配置**：本机签名 Apple 安装包已注入独立 OneDrive、Google 登录配置与原生 iCloud 容器。三家云在 macOS 均已验证真实连接；OneDrive、Google Drive 已完成示例书同步，OneDrive 重启恢复后再次同步成功。仓库和 CI 不含本机云配置，跨设备书籍／进度及其他平台真实登录尚未验收。[云接入说明](docs/cloud-setup.md)
 
 EPUB 当前为文字阅读，不是完整图文排版；扫描 PDF 暂不做 OCR。系统 TTS 的后台／锁屏／媒体键还需要逐端真机验证及补充适配，不能据前台播放代码宣称后台能力完成。
 
