@@ -294,9 +294,9 @@ class _ReaderScreenState extends State<ReaderScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            for (final rate in [.5, .75, 1.0, 1.25, 1.5, 1.75, 2.0])
+            for (final rate in [.7, .8, .9, 1.0, 1.1, 1.2])
               ListTile(
-                title: Text('$rate×'),
+                title: Text('${rate.toStringAsFixed(1)}×'),
                 selected: (player.speed * 2 - rate).abs() < .01,
                 onTap: () => Navigator.pop(c, rate),
               ),
@@ -735,7 +735,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                   TextButton.icon(
                     onPressed: speeds,
                     icon: const Icon(Icons.speed),
-                    label: Text('${(player.speed * 2).toStringAsFixed(2)}×'),
+                    label: Text('${(player.speed * 2).toStringAsFixed(1)}×'),
                   ),
                 ],
               ),

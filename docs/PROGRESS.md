@@ -104,3 +104,9 @@ macOS 真实 OneDrive 登录与示例书同步成功，重启后再次同步成�
 33 项回归通过，静态分析无问题；《红楼梦》真实本地性能和两个真实书源下载均已验证。iOS 模拟器原生音频前台连续约 90 秒通过。用户指定 Mike Backup iPhone 验收，已安装保留原书库的正常应用版本，未把测试入口装到手机；用户现已确认系统 TTS“持续播放，锁屏控制正常”。未据此声称四端或 Melo 锁屏已完成。每日任务无常驻服务器，完全退出后在下次运行补做。
 
 后续源码 1.0.5（7）补充 EPUB 结构章节识别、旧版章节／进度迁移，以及自动同步仅提示、不弹出进度冲突窗口（由用户手动查看）。最终 iOS 开发 IPA、Android 调试 APK、Developer ID 签名 macOS ZIP 均已构建，使用 build7 文件名保留构建 6；未覆盖手机上的已验收构建 6。待上传 GitHub 并核验 Windows CI；TestFlight 尚未上传。
+
+## 2026-11-16 / 1.0.6 (8) — 语速选项
+
+听书语速改为 0.7、0.8、0.9、1.0、1.1、1.2 倍，按钮与选项统一显示一位小数。静态分析通过；包含此修改的 iOS Release 本地编译及 Mike Backup iPhone 覆盖安装成功，书库保留。已核实共享 Runner Scheme 的 Run 为 Release、Debug executable 关闭；独立自动启动因手机锁屏被系统拒绝，未声称手机界面验收通过。
+
+此前 1.0.5（7）已于 2026-11-15 上传 GitHub 和 TestFlight，Apple 返回 Upload succeeded。本次按发布规则升级为 1.0.6（8），GitHub 与 TestFlight 提交结果以 dist 中发布回执为准。
