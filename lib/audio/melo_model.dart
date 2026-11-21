@@ -17,6 +17,7 @@ class MeloModel extends ChangeNotifier {
   String selected = 'system';
   bool installed = false, busy = false;
   int received = 0;
+  int totalBytes = archiveBytes;
   String? error;
   String phase = '';
   Future<void>? _loading;
@@ -53,10 +54,31 @@ class MeloModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> install() async {
+  Future<void> install({
+    String? downloadUrl,
+    String? expectedHash,
+    int? expectedBytes,
+  }) async {
     if (busy) return;
+    final url = Uri.parse(
+      downloadUrl ??
+          'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/$folder.tar.bz2',
+    );
+    final hash = expectedHash ?? archiveHash;
+    final size = expectedBytes ?? archiveBytes;
+    if (url.scheme != 'https' ||
+        url.host.isEmpty ||
+        url.userInfo.isNotEmpty ||
+        !RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(hash) ||
+        size <= 0 ||
+        size > 300 * 1024 * 1024) {
+      throw const FormatException(
+        '模型需要 HTTPS 下载地址、64 位 SHA-256 及正确的文件字节数（最多 300 MB）',
+      );
+    }
     busy = true;
     received = 0;
+    totalBytes = size;
     error = null;
     phase = '下载 Melo 模型中';
     notifyListeners();
@@ -68,11 +90,7 @@ class MeloModel extends ChangeNotifier {
       await base.create(recursive: true);
       work = await base.createTemp('melo-install-');
       final archive = File('${work.path}/model.tar.bz2');
-      final request = await client.getUrl(
-        Uri.parse(
-          'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/$folder.tar.bz2',
-        ),
-      );
+      final request = await client.getUrl(url);
       final response = await request.close().timeout(
         const Duration(seconds: 60),
       );
@@ -86,7 +104,7 @@ class MeloModel extends ChangeNotifier {
           const Duration(seconds: 60),
         )) {
           received += bytes.length;
-          if (received > archiveBytes) throw const FormatException('模型大小不匹配');
+          if (received > size) throw const FormatException('模型大小不匹配');
           sink.add(bytes);
           if (DateTime.now().difference(lastUpdate).inMilliseconds > 200) {
             notifyListeners();
@@ -96,18 +114,34 @@ class MeloModel extends ChangeNotifier {
       } finally {
         await sink.close();
       }
-      if (received != archiveBytes) throw const FormatException('模型下载不完整');
+      if (received != size) throw const FormatException('模型下载不完整');
       phase = '校验并安装 Melo 模型中';
       notifyListeners();
       final digest = await sha256.bind(archive.openRead()).first;
-      if (digest.toString() != archiveHash) {
+      if (digest.toString() != hash.toLowerCase()) {
         throw const FormatException('模型校验失败，请重新下载');
       }
       final stagingPath = work.path;
       await compute(extractMelo, stagingPath);
+      await File('${work.path}/$folder/.complete')
+          .writeAsString(hash.toLowerCase());
       final destination = Directory(await path);
-      if (await destination.exists()) await destination.delete(recursive: true);
-      await Directory('${work.path}/$folder').rename(destination.path);
+      final backup = Directory('${destination.path}.previous');
+      if (await backup.exists()) await backup.delete(recursive: true);
+      if (await destination.exists()) await destination.rename(backup.path);
+      try {
+        await Directory('${work.path}/$folder').rename(destination.path);
+      } catch (_) {
+        if (await backup.exists()) await backup.rename(destination.path);
+        rethrow;
+      }
+      if (await backup.exists()) await backup.delete(recursive: true);
+      if (downloadUrl != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('custom_melo_url', downloadUrl);
+        await prefs.setString('custom_melo_hash', hash.toLowerCase());
+        await prefs.setInt('custom_melo_bytes', size);
+      }
       installed = true;
     } catch (e) {
       error = e.toString();

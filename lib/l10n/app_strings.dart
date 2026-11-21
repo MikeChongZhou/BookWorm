@@ -51,6 +51,10 @@ class _StringsDelegate extends LocalizationsDelegate<AppStrings> {
 }
 
 const dynamicTranslations = <String, List<String>>{
+  r"^找到 (\d+) 本书，确认来源与下载权限后添加。$": [
+    "Found {1} books. Check the source and download permissions before adding.",
+    "Se encontraron {1} libros. Comprueba la fuente y los permisos antes de añadir.",
+  ],
   r"^第 (\d+) 章 · 共 (\d+) 章$": ["Chapter {1} of {2}", "Capítulo {1} de {2}"],
   r"^第 (\d+) 章$": ["Chapter {1}", "Capítulo {1}"],
   r"^每 (\d+) 秒翻页$": ["Turn every {1} seconds", "Pasar cada {1} segundos"],

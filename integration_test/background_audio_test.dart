@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yuejian/audio/book_audio_handler.dart';
 import 'package:yuejian/models/local_book.dart';
+import 'package:yuejian/history/reading_history.dart';
 import 'package:yuejian/screens/reader_screen.dart';
 
 class LifecycleProbe extends WidgetsBindingObserver {
@@ -39,6 +40,7 @@ void main() {
       author: 'BookWorm',
       format: 'txt',
       sections: [
+        const BookSection('第一章 · 跨章交接', '清晨，阳光落在窗边。这是书虫的离线听书测试。锁屏后，故事仍然继续。'),
         BookSection('第一章 · 后台音频', '清晨，阳光落在窗边。这是书虫的离线听书测试。锁屏后，故事仍然继续。' * 30),
       ],
     );
@@ -74,6 +76,7 @@ void main() {
       expect(p.playing, isTrue);
       expect(handler.mediaItem.value?.title, book.title);
       final initial = p.position.inMilliseconds;
+      final historyBefore = ReadingHistory.instance.record(book).milliseconds;
       // ignore: avoid_print
       print('BACKGROUND_AUDIO_READY');
       await report.writeAsString(
@@ -84,6 +87,7 @@ void main() {
       await Future<void>.delayed(const Duration(seconds: 90));
       final after = p.position.inMilliseconds;
       final stillPlaying = p.playing;
+      final played = ReadingHistory.instance.record(book).milliseconds - historyBefore;
       await handler.pause();
       final paused = p.position.inMilliseconds;
       await Future<void>.delayed(const Duration(seconds: 1));
@@ -99,6 +103,8 @@ void main() {
           'after_ms': after,
           'advanced_ms': after - initial,
           'still_playing_before_pause': stillPlaying,
+          'actual_played_ms': played,
+          'chapter_after': p.book.section,
           'pause_and_20_second_controls_passed': true,
           'error': p.error,
         }),
@@ -110,7 +116,8 @@ void main() {
       // ignore: avoid_print
       print('BACKGROUND_AUDIO_RESULT ${jsonEncode(result)}');
       expect(stillPlaying, isTrue);
-      expect(after - initial, greaterThan(20000));
+      expect(played, greaterThan(60000));
+      expect(p.book.section, greaterThan(0));
     });
     await tester.pumpWidget(const SizedBox());
   });

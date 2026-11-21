@@ -1,4 +1,67 @@
 const translations = <String, List<String>>{
+  "管理书源": ["Manage book sources", "Gestionar fuentes"],
+  "添加／管理书源": ["Add / manage sources", "Añadir / gestionar fuentes"],
+  "输入单本或多本书籍汇集网站。支持 OPDS、静态网页中的 EPUB／PDF／TXT 下载链接和同站分页；每次最多扫描 30 页、1000 本。需要登录或 JavaScript 的网站需单独适配。":
+      [
+        "Enter a website containing one or many books. Supports OPDS, static EPUB/PDF/TXT links and same-site pages, up to 30 pages and 1,000 books per scan. Sites requiring sign-in or JavaScript need a dedicated adapter.",
+        "Introduce un sitio con uno o varios libros. Admite OPDS, enlaces estáticos EPUB/PDF/TXT y páginas del mismo sitio, hasta 30 páginas y 1000 libros por consulta. Los sitios con inicio de sesión o JavaScript necesitan adaptación.",
+      ],
+  "书籍网站网址": ["Book website URL", "URL del sitio de libros"],
+  "正在检查连接并识别书籍…": [
+    "Checking connection and finding books…",
+    "Comprobando conexión y buscando libros…",
+  ],
+  "检查连接并预览": [
+    "Check connection and preview",
+    "Comprobar conexión y previsualizar",
+  ],
+  "添加此书源": ["Add this source", "Añadir esta fuente"],
+  "内置书源": ["Built-in sources", "Fuentes incluidas"],
+  "文硕阁（GitHub）\nStandard Ebooks\n大陆可用性需在当前网络检查，网页可访问不代表文件可下载。": [
+    "Wenshuoge (GitHub)\nStandard Ebooks\nMainland access must be tested on the actual network. A working webpage does not guarantee file downloads.",
+    "Wenshuoge (GitHub)\nStandard Ebooks\nEl acceso en China continental debe probarse en la red real. Poder abrir la página no garantiza la descarga.",
+  ],
+  "每天随目录检查更新；移除书源保留已下载书籍": [
+    "Checked daily with the catalog. Removing a source keeps downloaded books.",
+    "Se comprueba a diario. Eliminar la fuente conserva los libros descargados.",
+  ],
+  "移除书源": ["Remove source", "Eliminar fuente"],
+  "添加模型网址": ["Add model URL", "Añadir URL de modelo"],
+  "仅接受兼容当前 Melo VITS 中文／英文引擎的 tar.bz2 模型包，目录须为 vits-melo-tts-zh_en，含 ONNX、词表与词典。其他模型架构需额外适配。请确认模型许可证允许使用。":
+      [
+        "Accepts tar.bz2 packages compatible with the current Chinese/English Melo VITS engine. The vits-melo-tts-zh_en directory must contain ONNX, tokens and dictionaries. Other architectures need an adapter. Check the model license before use.",
+        "Admite paquetes tar.bz2 compatibles con Melo VITS chino/inglés. La carpeta vits-melo-tts-zh_en debe contener ONNX, tokens y diccionarios. Otras arquitecturas requieren adaptación. Comprueba la licencia del modelo.",
+      ],
+  "HTTPS 模型包网址": ["HTTPS model package URL", "URL HTTPS del paquete"],
+  "文件大小（字节）": ["File size (bytes)", "Tamaño del archivo (bytes)"],
+  "校验并安装": ["Verify and install", "Verificar e instalar"],
+  "请先停止听书再更换模型，当前播放不会被打断": [
+    "Stop listening before replacing the model. Current playback will continue.",
+    "Detén la escucha antes de cambiar el modelo. La reproducción actual continúa.",
+  ],
+
+  "历史": ["History", "Historial"],
+  "阅读历史": ["Reading history", "Historial de lectura"],
+  "小时": ["hr", "h"],
+  "分钟": ["min", "min"],
+  "读完": ["Finished", "Terminados"],
+  "在读": ["Reading", "En lectura"],
+  "未读": ["Unread", "Sin leer"],
+  "总书籍": ["Total books", "Total de libros"],
+  "读听时长": ["Reading & listening time", "Tiempo de lectura y escucha"],
+  "累计读听时长": [
+    "Total reading & listening time",
+    "Tiempo total de lectura y escucha",
+  ],
+  "阅读状态": ["Reading status", "Estado de lectura"],
+  "设为在读": ["Mark as reading", "Marcar en lectura"],
+  "标记读完": ["Mark as finished", "Marcar terminado"],
+  "暂无书籍": ["No books yet", "Sin libros"],
+  "时长从此版本起记录，包含阅读和听书，仅保存在本机。": [
+    "Time tracking starts with this version, includes reading and listening, and is stored on this device.",
+    "El tiempo se registra desde esta versión, incluye lectura y escucha y se guarda en este dispositivo.",
+  ],
+
   "有其他设备进度，可手动查看": [
     "Other device positions are available to review",
     "Hay posiciones de otros dispositivos para revisar",

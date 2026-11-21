@@ -14,6 +14,7 @@ import '../audio/melo_speech.dart';
 import '../audio/chapter_timeline.dart';
 import '../models/local_book.dart';
 import '../l10n/app_strings.dart';
+import '../history/reading_history.dart';
 
 class ReaderScreen extends StatefulWidget {
   final LocalBook book;
@@ -48,6 +49,23 @@ class _ReaderScreenState extends State<ReaderScreen>
   String pageKey = '';
   int page = 0;
   Timer? autoPage;
+  Timer? historyTimer;
+  final historyClock = Stopwatch();
+  void recordReading() {
+    final elapsed = historyClock.elapsed;
+    historyClock.reset();
+    if (foreground &&
+        !listening &&
+        !player.playing &&
+        !player.buffering &&
+        (ModalRoute.of(context)?.isCurrent ?? true)) {
+      ReadingHistory.instance.add(
+        book,
+        Duration(milliseconds: elapsed.inMilliseconds.clamp(0, 2000)),
+      );
+    }
+  }
+
   int autoSeconds = 15;
   double? scrub;
   String? noteQuote;
@@ -72,6 +90,11 @@ class _ReaderScreenState extends State<ReaderScreen>
             widget.persist,
           );
     player.addListener(changed);
+    historyClock.start();
+    historyTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => recordReading(),
+    );
     unawaited(_loadSettings());
     unawaited(_attach());
   }
@@ -114,7 +137,9 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    recordReading();
     foreground = state == AppLifecycleState.resumed;
+    unawaited(ReadingHistory.instance.save());
     // Locking the screen saves progress; it must never pause the audio session.
     if (!foreground) unawaited(player.persist());
   }
@@ -122,6 +147,8 @@ class _ReaderScreenState extends State<ReaderScreen>
   Future<void> leave() async {
     if (closing) return;
     closing = true;
+    recordReading();
+    unawaited(ReadingHistory.instance.save());
     try {
       await player.persist();
       if (!player.ready && !player.playing && !player.buffering) {
@@ -136,6 +163,8 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   @override
   void dispose() {
+    historyTimer?.cancel();
+    historyClock.stop();
     autoPage?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     player.removeListener(changed);

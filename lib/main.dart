@@ -29,6 +29,8 @@ import 'screens/about_screen.dart';
 import 'audio/book_audio_handler.dart';
 import 'downloads/book_catalog.dart';
 import 'screens/downloads_screen.dart';
+import 'screens/history_screen.dart';
+import 'history/reading_history.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -356,6 +358,7 @@ class _LibraryScreenState extends State<LibraryScreen>
   Future<void> load() async {
     try {
       prefs = await SharedPreferences.getInstance();
+      unawaited(ReadingHistory.instance.load());
       device =
           prefs!.getString('bookworm_device') ??
           List.generate(
@@ -542,50 +545,22 @@ class _LibraryScreenState extends State<LibraryScreen>
         return;
       }
       await refresh();
-      for (final remote in result.positions) {
-        if (automatic) break;
-        if (!mounted) break;
-        final b = books.where((b) => b.id == remote.bookId).firstOrNull;
-        if (b == null) continue;
-        final acknowledgement =
-            'sync_ack_${cloud.name}_${remote.bookId}_${remote.device}';
-        if ((prefs?.getInt(acknowledgement) ?? -1) >= remote.modified) continue;
-        final use = await showDialog<bool>(
-          context: context,
-          builder: (c) => AlertDialog(
-            title: Text(t('《${b.title}》有另一设备的进度')),
-            content: Text(
-              t(
-                '本机：第 ${b.section + 1} 节\n另一设备：第 ${remote.section + 1} 节\n\n是否从另一设备的位置继续？本机位置不会被静默覆盖。',
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(c, false),
-                child: Text(t('保留本机')),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(c, true),
-                child: Text(t('使用另一进度')),
-              ),
-            ],
-          ),
-        );
-        if (use == true) {
-          b.locate(remote.section, remote.offset);
-          await store!.save(b);
+      // Sync has already persisted the furthest position, independent of timestamps.
+      final player = BookAudioHandler.instance?.player;
+      if (player != null && !player.playing && !player.buffering) {
+        final merged = books.where((b) => b.id == player.book.id).firstOrNull;
+        if (merged != null &&
+            LibrarySync.isAhead(
+              merged.section,
+              merged.offset,
+              merged.audioOffsetMs,
+              player.book,
+            )) {
+          player.book.locate(merged.section, merged.offset);
+          player.book.audioOffsetMs = merged.audioOffsetMs;
         }
-        if (use != null) await prefs?.setInt(acknowledgement, remote.modified);
       }
-      hasRemotePositions = result.positions.any(
-        (remote) =>
-            books.any((book) => book.id == remote.bookId) &&
-            (prefs?.getInt(
-                      'sync_ack_${cloud.name}_${remote.bookId}_${remote.device}',
-                    ) ??
-                    -1) <
-                remote.modified,
-      );
+      hasRemotePositions = false;
       await refresh();
       await prefs?.setString(
         'bookworm_last_sync',
@@ -796,8 +771,8 @@ class _LibraryScreenState extends State<LibraryScreen>
                     label: Text(t('书架')),
                   ),
                   NavigationRailDestination(
-                    icon: Icon(Icons.headphones_outlined),
-                    label: Text(t('听书')),
+                    icon: Icon(Icons.history),
+                    label: Text(t('历史')),
                   ),
                   NavigationRailDestination(
                     icon: Icon(Icons.download_outlined),
@@ -901,7 +876,12 @@ class _LibraryScreenState extends State<LibraryScreen>
                       ],
                     ),
                   Expanded(
-                    child: tab == 2
+                    child: tab == 1 && !loading
+                        ? HistoryPanel(
+                            books: books,
+                            open: (book) => openBook(book, listen: false),
+                          )
+                        : tab == 2
                         ? DownloadsPanel(
                             catalog: catalog,
                             library: store,
@@ -1189,8 +1169,8 @@ class _LibraryScreenState extends State<LibraryScreen>
                     label: t('书架'),
                   ),
                   NavigationDestination(
-                    icon: Icon(Icons.headphones_outlined),
-                    label: t('听书'),
+                    icon: Icon(Icons.history),
+                    label: t('历史'),
                   ),
                   NavigationDestination(
                     icon: Icon(Icons.download_outlined),

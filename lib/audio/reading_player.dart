@@ -1,4 +1,7 @@
 import 'dart:async';
+
+import '../history/reading_history.dart';
+
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -25,6 +28,10 @@ abstract interface class SpeechResources {
 abstract interface class NextSpeech {
   int get chunkLimit;
   void nextText(String? text);
+}
+
+abstract interface class AheadSpeech {
+  void ahead(List<String> texts);
 }
 
 class DeviceSpeech implements SpeechEngine {
@@ -116,6 +123,8 @@ class ReadingPlayer extends ChangeNotifier {
   Future<void>? _initializing;
   Future<void> Function()? beforePlay;
   DateTime _lastSave = DateTime.now();
+  Duration? _historyAudioPosition;
+  int _historyFallbackMs = 0;
   ReadingPlayer(this.book, this.engine, this.persist) {
     engine.progress((start, end) {
       if (!playing || disposed || book.section != _spokenSection) return;
@@ -125,6 +134,17 @@ class ReadingPlayer extends ChangeNotifier {
     if (engine is SpeechTiming) {
       (engine as SpeechTiming).playbackProgress((position, duration) {
         if (!playing || disposed || book.section != _spokenSection) return;
+        final previous = _historyAudioPosition;
+        if (previous != null && position > previous) {
+          ReadingHistory.instance.add(
+            book,
+            Duration(
+              microseconds: ((position - previous).inMicroseconds / (speed * 2))
+                  .round(),
+            ),
+          );
+        }
+        _historyAudioPosition = position;
         _within = position;
         book.audioOffsetMs = position.inMilliseconds;
         final span = timeline.chunkAt(_base);
@@ -138,6 +158,14 @@ class ReadingPlayer extends ChangeNotifier {
     _ticker = Timer.periodic(const Duration(milliseconds: 250), (_) {
       if (!playing || disposed || buffering) return;
       if (!mediaClock) {
+        final now = _clock.elapsedMilliseconds;
+        if (now > _historyFallbackMs) {
+          ReadingHistory.instance.add(
+            book,
+            Duration(milliseconds: now - _historyFallbackMs),
+          );
+        }
+        _historyFallbackMs = now;
         _within = Duration(
           milliseconds: (_clock.elapsedMilliseconds * speed * 2).round(),
         );
@@ -170,6 +198,7 @@ class ReadingPlayer extends ChangeNotifier {
   SpeechSpan get sentence => timeline.sentenceAt(book.offset);
   Future<void> _save() async {
     try {
+      unawaited(ReadingHistory.instance.save());
       await persist();
     } catch (e) {
       error = '保存进度失败：$e';
@@ -211,7 +240,11 @@ class ReadingPlayer extends ChangeNotifier {
       while (playing && generation == _generation && !disposed) {
         final index = book.section, text = book.sections[index].text;
         if (book.offset >= text.length) {
-          if (index == book.sections.length - 1 || stopAtSection) break;
+          if (index == book.sections.length - 1) {
+            ReadingHistory.instance.complete(book);
+            break;
+          }
+          if (stopAtSection) break;
           book.locate(index + 1, 0);
           _spokenSection = -1;
           await _save();
@@ -229,11 +262,35 @@ class ReadingPlayer extends ChangeNotifier {
         _within = Duration(milliseconds: book.audioOffsetMs);
         if (mediaClock) (engine as SpeechTiming).startPosition(_within);
         final utterance = text.substring(start, end);
+        _historyAudioPosition = null;
+        _historyFallbackMs = 0;
         if (engine is NextSpeech) {
           final next = end < text.length
               ? text.substring(end, timeline.chunkAt(end).end)
               : null;
           (engine as NextSpeech).nextText(next);
+        }
+        if (engine is AheadSpeech) {
+          final ahead = <String>[];
+          var section = index, offset = end;
+          while (ahead.length < 4) {
+            final source = book.sections[section].text;
+            if (offset >= source.length) {
+              if (section == book.sections.length - 1 || stopAtSection) break;
+              section++;
+              offset = 0;
+              continue;
+            }
+            final line = _timelines.putIfAbsent(
+              section,
+              () => ChapterTimeline(source),
+            );
+            final limit = line.chunkAt(offset).end;
+            if (limit <= offset) break;
+            ahead.add(source.substring(offset, limit));
+            offset = limit;
+          }
+          (engine as AheadSpeech).ahead(ahead);
         }
         buffering = mediaClock;
         _clock
@@ -266,6 +323,7 @@ class ReadingPlayer extends ChangeNotifier {
       playing = false;
       buffering = false;
       _clock.stop();
+      await engine.stop();
       await _save();
       notifyListeners();
     }

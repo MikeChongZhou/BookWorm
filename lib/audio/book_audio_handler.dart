@@ -35,6 +35,26 @@ class BookAudioHandler extends BaseAudioHandler {
   StreamSubscription<AudioInterruptionEvent>? _interruptions;
   StreamSubscription<void>? _noisy;
   bool _resumeAfterInterruption = false;
+  Future<void>? _interruptionPause;
+  Future<void> handleInterruption(AudioInterruptionEvent event) async {
+    if (event.begin) {
+      _resumeAfterInterruption =
+          _resumeAfterInterruption ||
+          (_player?.playing ?? false) ||
+          (_player?.buffering ?? false);
+      _interruptionPause = _player?.pause();
+      await _interruptionPause;
+    } else {
+      await _interruptionPause;
+      final resume =
+          _resumeAfterInterruption &&
+          (event.type == AudioInterruptionType.pause ||
+              event.type == AudioInterruptionType.duck);
+      _resumeAfterInterruption = false;
+      if (resume) await play();
+    }
+  }
+
   int _section = -1;
   Uri? _art;
   String _state = '';
@@ -76,14 +96,7 @@ class BookAudioHandler extends BaseAudioHandler {
     _session ??= await AudioSession.instance;
     await _session!.configure(const AudioSessionConfiguration.speech());
     _interruptions ??= _session!.interruptionEventStream.listen((event) {
-      if (event.begin) {
-        _resumeAfterInterruption = _player?.playing ?? false;
-        unawaited(_player?.pause());
-      } else if (_resumeAfterInterruption &&
-          event.type == AudioInterruptionType.pause) {
-        _resumeAfterInterruption = false;
-        unawaited(play());
-      }
+      unawaited(handleInterruption(event));
     });
     _noisy ??= _session!.becomingNoisyEventStream.listen((_) {
       _resumeAfterInterruption = false;

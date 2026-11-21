@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:audio_session/audio_session.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -18,6 +19,8 @@ import 'package:yuejian/screens/reader_screen.dart';
 import 'package:yuejian/main.dart';
 import 'package:yuejian/importing/book_importer.dart';
 import 'package:yuejian/cloud/library_sync.dart';
+
+import 'package:yuejian/history/reading_history.dart';
 
 import 'local_features_test.dart' show ControlledSpeech, MemoryCloud, tick;
 
@@ -71,51 +74,113 @@ class FakeLibrary extends LocalLibrary {
 }
 
 void main() {
-  testWidgets(
-    'automatic sync reports remote positions without a blocking dialog',
-    (tester) async {
-      SharedPreferences.setMockInitialValues({
-        'bookworm_language': 'zh',
-        'bookworm_cloud': 'test',
-        'bookworm_device': 'bbbb',
-      });
-      final id = '1' * 64;
+  test(
+    'audio history counts rendered playback, excluding paused time and seeks',
+    () async {
+      SharedPreferences.setMockInitialValues({});
       final book = LocalBook(
-        id: id,
-        title: '进度测试',
-        author: '作者',
+        id: 'history-clock',
+        title: '计时',
+        author: '',
         format: 'txt',
-        sections: [const BookSection('正文', '甲乙丙丁戊己庚辛壬癸。')],
+        sections: [BookSection('正文', '长句，' * 200)],
       );
-      final cloud = MemoryCloud();
-      cloud.files['book-$id.manifest'] = utf8.encode(
-        jsonEncode({'schema': 1, 'id': id, 'parts': []}),
+      final engine = ClockSpeech();
+      final player = ReadingPlayer(book, engine, () async {});
+      ReadingHistory.instance.records.remove(book.id);
+      unawaited(player.play());
+      await tick();
+      engine.clock!(const Duration(seconds: 10), const Duration(seconds: 40));
+      expect(ReadingHistory.instance.record(book).milliseconds, 10000);
+      await player.pause();
+      engine.clock!(const Duration(seconds: 20), const Duration(seconds: 40));
+      await player.jump(20);
+      expect(ReadingHistory.instance.record(book).milliseconds, 10000);
+      unawaited(player.play());
+      await tick();
+      engine.clock!(
+        engine.start + const Duration(seconds: 5),
+        const Duration(seconds: 40),
       );
-      cloud.files['position-$id-aaaa.json'] = utf8.encode(
-        jsonEncode({
-          'id': id,
-          'device': 'aaaa',
-          'section': 0,
-          'offset': 5,
-          'modified': 100,
-        }),
-      );
-      await tester.pumpWidget(
-        ReaderApp(library: FakeLibrary(book), cloudProviders: [cloud]),
-      );
-      await tester.pumpAndSettle();
-      expect(find.byType(AlertDialog), findsNothing);
-      expect(book.offset, 0);
-      expect(find.text('检查其他设备进度'), findsOneWidget);
-      await tester.tap(find.text('检查其他设备进度'));
-      await tester.pumpAndSettle();
-      expect(find.byType(AlertDialog), findsOneWidget);
-      await tester.tap(find.text('保留本机'));
-      await tester.pumpAndSettle();
-      expect(book.offset, 0);
-      await tester.pumpWidget(const SizedBox());
+      expect(ReadingHistory.instance.record(book).milliseconds, 15000);
+      await player.pause();
+      player.dispose();
+      await ReadingHistory.instance.save();
     },
   );
+  test(
+    'duck interruptions resume, while an explicit user pause prevents resuming',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final handler = BookAudioHandler();
+      final player = ReadingPlayer(sample(), ClockSpeech(), () async {});
+      await handler.attach(player);
+      player.beforePlay = () async {};
+      unawaited(player.play());
+      await tick();
+      await handler.handleInterruption(
+        AudioInterruptionEvent(true, AudioInterruptionType.duck),
+      );
+      expect(player.playing, false);
+      await handler.handleInterruption(
+        AudioInterruptionEvent(false, AudioInterruptionType.duck),
+      );
+      await tick();
+      expect(player.playing, true);
+      await handler.handleInterruption(
+        AudioInterruptionEvent(true, AudioInterruptionType.pause),
+      );
+      await handler.pause();
+      await handler.handleInterruption(
+        AudioInterruptionEvent(false, AudioInterruptionType.pause),
+      );
+      await tick();
+      expect(player.playing, false);
+      await handler.detach(player);
+      player.dispose();
+      await ReadingHistory.instance.save();
+    },
+  );
+  testWidgets('automatic sync adopts furthest position without a dialog', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      'bookworm_language': 'zh',
+      'bookworm_cloud': 'test',
+      'bookworm_device': 'bbbb',
+    });
+    final id = '1' * 64;
+    final book = LocalBook(
+      id: id,
+      title: '进度测试',
+      author: '作者',
+      format: 'txt',
+      sections: [const BookSection('正文', '甲乙丙丁戊己庚辛壬癸。')],
+    );
+    final cloud = MemoryCloud();
+    cloud.files['book-$id.manifest'] = utf8.encode(
+      jsonEncode({'schema': 1, 'id': id, 'parts': []}),
+    );
+    cloud.files['position-$id-aaaa.json'] = utf8.encode(
+      jsonEncode({
+        'id': id,
+        'device': 'aaaa',
+        'section': 0,
+        'offset': 5,
+        'modified': 100,
+      }),
+    );
+    await tester.pumpWidget(
+      ReaderApp(library: FakeLibrary(book), cloudProviders: [cloud]),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(book.offset, 5);
+    expect(find.text('检查其他设备进度'), findsNothing);
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
   testWidgets('audio session survives returning from the reader', (
     tester,
   ) async {

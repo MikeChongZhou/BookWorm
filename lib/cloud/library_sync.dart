@@ -12,13 +12,15 @@ import 'cloud_provider.dart';
 class RemotePosition {
   final String bookId, device;
   final int section, offset, modified;
+  final int audioOffsetMs;
   RemotePosition(
     this.bookId,
     this.device,
     this.section,
     this.offset,
-    this.modified,
-  );
+    this.modified, [
+    this.audioOffsetMs = 0,
+  ]);
 }
 
 class SyncResult {
@@ -28,6 +30,16 @@ class SyncResult {
 }
 
 class LibrarySync {
+  static bool isAhead(
+    int section,
+    int offset,
+    int audioOffsetMs,
+    LocalBook book,
+  ) =>
+      section > book.section ||
+      (section == book.section &&
+          (offset > book.offset ||
+              (offset == book.offset && audioOffsetMs > book.audioOffsetMs)));
   final LocalLibrary library;
   final String deviceId;
   LibrarySync(this.library, this.deviceId);
@@ -170,7 +182,13 @@ class LibrarySync {
           offset > b.sections[section].text.length) {
         continue;
       }
-      if (b.section != section || b.offset != offset) {
+      final audioOffset = (p['audioOffsetMs'] as int? ?? 0).clamp(
+        0,
+        24 * 60 * 60 * 1000,
+      );
+      if (isAhead(section, offset, audioOffset, b)) {
+        b.locate(section, offset);
+        b.audioOffsetMs = audioOffset;
         result.positions.add(
           RemotePosition(
             b.id,
@@ -178,9 +196,24 @@ class LibrarySync {
             section,
             offset,
             p['modified'] as int,
+            audioOffset,
           ),
         );
       }
+    }
+    for (final b in map.values) {
+      if (!result.positions.any((p) => p.bookId == b.id)) continue;
+      if (yieldRequested?.call() == true) {
+        result.deferred = true;
+        return result;
+      }
+      await library.save(b);
+      await cloud.write(
+        'position-${b.id}-$deviceId.json',
+        Uint8List.fromList(
+          utf8.encode(jsonEncode({...b.position(), 'device': deviceId})),
+        ),
+      );
     }
     return result;
   }

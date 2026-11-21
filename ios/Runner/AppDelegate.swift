@@ -6,6 +6,7 @@ import AVFoundation
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var privateCloud: BookWormICloud?
   private var speechRenderer: BookWormSpeechRenderer?
+  private var audioTransition: BookWormAudioTransition?
 
   override func application(
     _ application: UIApplication,
@@ -16,11 +17,45 @@ import AVFoundation
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "BookWormAudioTransition") {
+      audioTransition = BookWormAudioTransition(messenger: registrar.messenger())
+    }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "BookWormSpeechRenderer") {
       speechRenderer = BookWormSpeechRenderer(messenger: registrar.messenger())
     }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "BookWormICloud") {
       privateCloud = BookWormICloud(messenger: registrar.messenger())
+    }
+  }
+}
+
+// A finite assertion protects the brief gap between real audio files. It is
+// released as soon as playback resumes, never used as a permanent background loop.
+final class BookWormAudioTransition {
+  private let channel: FlutterMethodChannel
+  private var task: UIBackgroundTaskIdentifier = .invalid
+  init(messenger: FlutterBinaryMessenger) {
+    channel = FlutterMethodChannel(name: "bookworm/audio_transition", binaryMessenger: messenger)
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self else { result(nil); return }
+      switch call.method {
+      case "begin":
+        if self.task == .invalid {
+          self.task = UIApplication.shared.beginBackgroundTask(withName: "BookWorm audio handoff") { [weak self] in
+            NSLog("BookWorm audio handoff expired; next audio was not ready")
+            self?.end()
+          }
+        }
+        result(nil)
+      case "end": self.end(); result(nil)
+      default: result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+  private func end() {
+    if task != .invalid {
+      UIApplication.shared.endBackgroundTask(task)
+      task = .invalid
     }
   }
 }

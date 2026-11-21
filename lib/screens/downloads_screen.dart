@@ -4,6 +4,7 @@ import '../downloads/book_catalog.dart';
 import '../storage/local_library.dart';
 import '../models/local_book.dart';
 import '../l10n/app_strings.dart';
+import 'sources_screen.dart';
 
 class DownloadsPanel extends StatefulWidget {
   final BookCatalog catalog;
@@ -57,6 +58,16 @@ class _DownloadsPanelState extends State<DownloadsPanel> {
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 16),
+                  TextButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => SourcesScreen(catalog: catalog),
+                      ),
+                    ),
+                    icon: const Icon(Icons.add_link),
+                    label: Text(context.tr('添加／管理书源')),
+                  ),
                   TextField(
                     onChanged: (value) => setState(() => query = value),
                     decoration: InputDecoration(
@@ -69,7 +80,12 @@ class _DownloadsPanelState extends State<DownloadsPanel> {
                   Wrap(
                     spacing: 8,
                     children: [
-                      for (final value in ['all', '文硕阁', 'Standard Ebooks'])
+                      for (final value in [
+                        'all',
+                        '文硕阁',
+                        'Standard Ebooks',
+                        ...catalog.customSources,
+                      ])
                         ChoiceChip(
                           label: Text(
                             value == 'all' ? context.tr('全部') : value,

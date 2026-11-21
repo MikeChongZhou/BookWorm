@@ -12,7 +12,12 @@ import 'system_file_speech.dart';
 
 /// Native inference stays on a long-lived isolate, never on the UI thread.
 class MeloSpeech
-    implements SpeechEngine, SpeechResources, NextSpeech, SpeechTiming {
+    implements
+        SpeechEngine,
+        SpeechResources,
+        NextSpeech,
+        AheadSpeech,
+        SpeechTiming {
   final FileAudioTransport _transport = FileAudioTransport();
   final Map<int, Completer<String>> _pending = {};
   final Map<String, Future<String>> _cache = {};
@@ -23,6 +28,9 @@ class MeloSpeech
   Future<void>? _preparing;
   void Function(int, int)? _progress;
   String? _next;
+  List<String> _ahead = [];
+  @override
+  void ahead(List<String> texts) => _ahead = texts;
   int _sequence = 0, _generation = 0;
   bool _closed = false;
 
@@ -93,7 +101,9 @@ class MeloSpeech
     final file = await _generate(text);
     if (_closed || generation != _generation) return;
     // Keep the current and next chunks only. Files are local, temporary audio.
-    final obsolete = _cache.keys.where((k) => k != text && k != _next).toList();
+    final obsolete = _cache.keys
+        .where((k) => k != text && k != _next && !_ahead.contains(k))
+        .toList();
     for (final key in obsolete) {
       final cached = _cache.remove(key)!;
       unawaited(
@@ -109,12 +119,20 @@ class MeloSpeech
     await _transport.play(
       file,
       prefetch: () {
-        final next = _next;
-        if (next != null && next.trim().isNotEmpty) {
-          unawaited(
-            _generate(next).then<void>((_) {}).catchError((Object _) {}),
-          );
-        }
+        unawaited(() async {
+          final generation = _generation;
+          final pending = _ahead.isNotEmpty
+              ? List<String>.of(_ahead)
+              : [?_next];
+          for (final next in pending) {
+            if (generation != _generation || _closed) return;
+            try {
+              await _generate(next);
+            } catch (_) {
+              _cache.remove(next);
+            }
+          }
+        }());
       },
     );
   }
@@ -225,7 +243,12 @@ void meloWorker(List<dynamic> args) {
 }
 
 class SelectedSpeech
-    implements SpeechEngine, SpeechResources, NextSpeech, SpeechTiming {
+    implements
+        SpeechEngine,
+        SpeechResources,
+        NextSpeech,
+        AheadSpeech,
+        SpeechTiming {
   SpeechEngine? _engine;
   Future<void>? _preparing;
   bool _closed = false;
@@ -236,6 +259,9 @@ class SelectedSpeech
   Future<void> _prepare() async {
     await MeloModel.instance.load();
     if (_closed) throw StateError('语音已关闭');
+    if (MeloModel.instance.selected == 'melo' && MeloModel.instance.busy) {
+      throw StateError('语音模型安装中，请完成后再开始听书');
+    }
     final engine = MeloModel.instance.selected == 'melo'
         ? MeloSpeech()
         : (Platform.isIOS || Platform.isAndroid
@@ -307,6 +333,12 @@ class SelectedSpeech
   void nextText(String? text) {
     final engine = _engine;
     if (engine is NextSpeech) (engine as NextSpeech).nextText(text);
+  }
+
+  @override
+  void ahead(List<String> texts) {
+    final engine = _engine;
+    if (engine is AheadSpeech) (engine as AheadSpeech).ahead(texts);
   }
 
   @override

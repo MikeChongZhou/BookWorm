@@ -10,7 +10,7 @@ import 'file_audio_transport.dart';
 /// iOS/Android system voices are rendered to real audio so lock-screen seeking
 /// and pausing use an audio clock rather than wall-clock guesses.
 class SystemFileSpeech extends DeviceSpeech
-    implements SpeechResources, NextSpeech, SpeechTiming {
+    implements SpeechResources, NextSpeech, AheadSpeech, SpeechTiming {
   final FileAudioTransport transport = FileAudioTransport();
   static const _native = MethodChannel('bookworm/system_speech');
   Map<String, String>? _voice;
@@ -18,6 +18,9 @@ class SystemFileSpeech extends DeviceSpeech
   Future<void> _queue = Future.value();
   Directory? _directory;
   String? _next;
+  List<String> _ahead = [];
+  @override
+  void ahead(List<String> texts) => _ahead = texts;
   int _number = 0, _generation = 0;
   bool _closed = false;
   void Function(int, int)? _callback;
@@ -75,7 +78,9 @@ class SystemFileSpeech extends DeviceSpeech
     final path = await _generate(text);
     if (generation != _generation || _closed) return;
     for (final key
-        in _cache.keys.where((s) => s != text && s != _next).toList()) {
+        in _cache.keys
+            .where((s) => s != text && s != _next && !_ahead.contains(s))
+            .toList()) {
       final obsolete = _cache.remove(key)!;
       unawaited(
         obsolete
@@ -90,12 +95,20 @@ class SystemFileSpeech extends DeviceSpeech
     await transport.play(
       path,
       prefetch: () {
-        final next = _next;
-        if (next != null && next.trim().isNotEmpty) {
-          unawaited(
-            _generate(next).then<void>((_) {}).catchError((Object _) {}),
-          );
-        }
+        unawaited(() async {
+          final generation = _generation;
+          final pending = _ahead.isNotEmpty
+              ? List<String>.of(_ahead)
+              : [?_next];
+          for (final next in pending) {
+            if (generation != _generation || _closed) return;
+            try {
+              await _generate(next);
+            } catch (_) {
+              _cache.remove(next);
+            }
+          }
+        }());
       },
     );
   }

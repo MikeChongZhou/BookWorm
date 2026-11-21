@@ -13,15 +13,18 @@ import 'package:xml/xml.dart';
 import '../importing/book_importer.dart';
 import '../models/local_book.dart';
 import '../storage/local_library.dart';
+import 'custom_sources.dart';
 
 class CatalogBook {
   final String id, title, author, source, pageUrl;
+  final String format;
   const CatalogBook({
     required this.id,
     required this.title,
     required this.author,
     required this.source,
     required this.pageUrl,
+    this.format = 'epub',
   });
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -29,6 +32,7 @@ class CatalogBook {
     'author': author,
     'source': source,
     'pageUrl': pageUrl,
+    'format': format,
   };
   factory CatalogBook.fromJson(Map<String, dynamic> j) => CatalogBook(
     id: j['id'],
@@ -36,6 +40,7 @@ class CatalogBook {
     author: j['author'],
     source: j['source'],
     pageUrl: j['pageUrl'],
+    format: j['format'] ?? 'epub',
   );
 }
 
@@ -54,6 +59,87 @@ class BookCatalog extends ChangeNotifier {
       'https://raw.githubusercontent.com/zhpelo/wenshuoge/main/文硕阁公版书目录.csv';
   static const standard = 'https://standardebooks.org/ebooks';
   List<CatalogBook> books = [];
+  List<String> customSources = [];
+  int _sourceRevision = 0;
+  Future<List<CatalogBook>> scanSource(String url) async {
+    final start = sourceUri(url);
+    final folder = await directory();
+    await folder.create(recursive: true);
+    final pending = <String>[start.toString()], seen = <String>{};
+    final found = <String, CatalogBook>{};
+    for (var i = 0; pending.isNotEmpty && i < 30; i++) {
+      if (shouldYield?.call() == true) {
+        deferred = true;
+        throw const FormatException('目录更新已延后，优先读书与听书');
+      }
+      final page = pending.removeAt(0);
+      if (!seen.add(page)) continue;
+      try {
+        final body = await _getCached(sourceUri(page), folder);
+        final result = await compute(discoverBooks, (
+          body!,
+          page,
+          start.toString(),
+        ));
+        for (final book in result.$1) {
+          found[book.id] = book;
+          if (found.length >= 1000) break;
+        }
+        for (final next in result.$2) {
+          if (!seen.contains(next) &&
+              !pending.contains(next) &&
+              pending.length < 100) {
+            pending.add(next);
+          }
+        }
+      } catch (e) {
+        if (i == 0 || deferred) rethrow;
+      }
+      if (found.length >= 1000) break;
+    }
+    if (found.isEmpty) {
+      throw const FormatException(
+        '未识别可下载书籍：支持 OPDS 和含 EPUB／PDF／TXT 链接的静态网站；不支持需要登录或 JavaScript 的页面',
+      );
+    }
+    return found.values.toList();
+  }
+
+  Future<void> addSource(String url, List<CatalogBook> preview) async {
+    _sourceRevision++;
+    final normalized = sourceUri(url).toString();
+    if (!customSources.contains(normalized)) customSources.add(normalized);
+    books = {
+      ...{for (final b in books) b.id: b},
+      ...{for (final b in preview) b.id: b},
+    }.values.toList();
+    await (await SharedPreferences.getInstance()).setStringList(
+      'custom_book_sources',
+      customSources,
+    );
+    await _saveCatalog();
+    _notify();
+  }
+
+  Future<void> removeSource(String url) async {
+    _sourceRevision++;
+    customSources.remove(url);
+    books.removeWhere((b) => b.source == url);
+    await (await SharedPreferences.getInstance()).setStringList(
+      'custom_book_sources',
+      customSources,
+    );
+    await _saveCatalog();
+    _notify();
+  }
+
+  Future<void> _saveCatalog() async {
+    final folder = await directory();
+    await folder.create(recursive: true);
+    await File('${folder.path}/catalog.json')
+        .writeAsString(await compute(encodeCatalog, books));
+  }
+
   bool refreshing = false, disposed = false, loaded = false;
   bool _checkingDaily = false;
   bool deferred = false;
@@ -81,6 +167,7 @@ class BookCatalog extends ChangeNotifier {
       error = '书库缓存暂不可用，将尝试更新';
     }
     final prefs = await SharedPreferences.getInstance();
+    customSources = prefs.getStringList('custom_book_sources') ?? [];
     updated = DateTime.tryParse(prefs.getString('catalog_updated') ?? '');
     completed.addAll(prefs.getStringList('catalog_downloaded') ?? []);
     loaded = true;
@@ -143,6 +230,7 @@ class BookCatalog extends ChangeNotifier {
     status = '正在更新公版书目录';
     _notify();
     final map = {for (final book in books) book.id: book};
+    final sourceRevision = _sourceRevision;
     final failures = <String>[];
     var succeeded = false;
     try {
@@ -197,6 +285,28 @@ class BookCatalog extends ChangeNotifier {
         succeeded = true;
       } catch (e) {
         failures.add('Standard Ebooks：$e');
+      }
+      for (final source in customSources.toList()) {
+        if (shouldYield?.call() == true) {
+          deferred = true;
+          break;
+        }
+        try {
+          final additions = await scanSource(source);
+          map.removeWhere((id, b) => b.source == source);
+          for (final b in additions) {
+            map[b.id] = b;
+          }
+          succeeded = true;
+        } catch (e) {
+          failures.add('$source：$e');
+        }
+      }
+      if (sourceRevision != _sourceRevision) {
+        map.removeWhere((_, b) => b.id.startsWith('custom:'));
+        for (final b in books.where((b) => customSources.contains(b.source))) {
+          map[b.id] = b;
+        }
       }
       books = map.values.toList();
       if (succeeded) {
@@ -274,6 +384,11 @@ class BookCatalog extends ChangeNotifier {
             !url.path.startsWith('/zhpelo/wenshuoge/')) {
           throw const FormatException('书源下载地址无效');
         }
+      } else if (customSources.contains(item.source)) {
+        url = sourceUri(item.pageUrl);
+        if (!['epub', 'pdf', 'txt'].contains(item.format)) {
+          throw const FormatException('未识别可下载格式');
+        }
       } else {
         final page = Uri.parse(item.pageUrl);
         if (page.scheme != 'https' ||
@@ -347,7 +462,10 @@ class BookCatalog extends ChangeNotifier {
       downloadStates[item.id] = '正在导入本地书架';
       _notify();
       final data = bytes.takeBytes();
-      final book = await BookImporter().parse('${item.title}.epub', data);
+      final extension = customSources.contains(item.source)
+          ? item.format
+          : 'epub';
+      final book = await BookImporter().parse('${item.title}.$extension', data);
       final existing = (await library.load())
           .where((b) => b.id == book.id)
           .firstOrNull;

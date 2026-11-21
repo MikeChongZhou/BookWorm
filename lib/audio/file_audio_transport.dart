@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/services.dart';
 
 import 'package:audioplayers/audioplayers.dart';
 
@@ -21,6 +24,26 @@ class FileAudioTransport {
   double speed = 1;
   int _generation = 0;
   bool closed = false;
+  static const _transition = MethodChannel('bookworm/audio_transition');
+  bool _holding = false;
+  Future<void> _hold() async {
+    if (!Platform.isIOS || _holding || closed) return;
+    _holding = true;
+    try {
+      await _transition.invokeMethod<void>('begin');
+    } catch (_) {
+      _holding = false;
+    }
+  }
+
+  Future<void> _release() async {
+    if (!Platform.isIOS || !_holding) return;
+    _holding = false;
+    try {
+      await _transition.invokeMethod<void>('end');
+    } catch (_) {}
+  }
+
   Future<void> prepare() async {
     // Flutter frame callbacks stop when the screen is locked. The media clock
     // must keep polling native playback independently of UI frames.
@@ -51,6 +74,11 @@ class FileAudioTransport {
       if (_done?.isCompleted == false) _done!.complete();
     }, onError: _fail);
     _position = player.onPositionChanged.listen((p) {
+      if (player.state == PlayerState.playing &&
+          _duration > Duration.zero &&
+          _duration - p < const Duration(seconds: 5)) {
+        unawaited(_hold());
+      }
       if (_duration > Duration.zero) progress?.call(p, _duration);
     }, onError: _fail);
   }
@@ -69,6 +97,7 @@ class FileAudioTransport {
     unawaited(done.future.catchError((Object _) {}));
     _done = done;
     try {
+      await _hold();
       _duration = Duration.zero;
       await player.setSource(DeviceFileSource(file));
       if (generation != _generation || closed) return;
@@ -81,6 +110,7 @@ class FileAudioTransport {
       if (position > Duration.zero) await player.seek(position);
       if (generation != _generation || closed) return;
       await player.resume();
+      await _release();
       if (generation != _generation || closed) {
         await player.stop();
         return;
@@ -88,7 +118,11 @@ class FileAudioTransport {
       progress?.call(position, _duration);
       prefetch?.call();
       await done.future;
+    } catch (_) {
+      await _release();
+      rethrow;
     } finally {
+      if (generation != _generation || closed) await _release();
       if (identical(_done, done)) _done = null;
     }
   }
@@ -97,6 +131,7 @@ class FileAudioTransport {
     _generation++;
     if (_done?.isCompleted == false) _done!.complete();
     await player.stop();
+    await _release();
   }
 
   Future<void> close() async {

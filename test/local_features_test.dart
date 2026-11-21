@@ -197,7 +197,7 @@ void main() {
       '旧笔记',
     ]);
   });
-  test('sync transfers original book and offers conflicting positions instead of overwriting', () async {
+  test('sync transfers original book and merges furthest position', () async {
     final a = await Directory.systemTemp.createTemp('bookworm_a'),
         b = await Directory.systemTemp.createTemp('bookworm_b');
     addTearDown(() async {
@@ -231,7 +231,7 @@ void main() {
     await LibrarySync(sa, 'aaaa').run(cloud);
     final next = await LibrarySync(sb, 'bbbb').run(cloud);
     expect(next.positions.single.offset, 5);
-    expect((await sb.load()).single.offset, 0);
+    expect((await sb.load()).single.offset, 5);
     final repeated = await LibrarySync(sb, 'bbbb').run(cloud);
     expect(repeated.downloaded, 0);
   });
