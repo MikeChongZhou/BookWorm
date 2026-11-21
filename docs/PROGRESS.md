@@ -140,3 +140,5 @@ macOS 真实 OneDrive 登录与示例书同步成功，重启后再次同步成�
 用户要求 Android／macOS／Windows 安装包由 GitHub 提供。三平台功能共用已发布源码；Windows 媒体插件升级 0.0.6、限定 C++20，修复新 MSVC 误入实验协程头的编译错误；Windows 应用版本升级 1.0.8（10）。Android／macOS 本轮只重新分发，保留产品版本 1.0.7 并滚动构建号至 10；iOS 保持 1.0.7（9）。版本由 release/platforms.json 及显式构建参数管理，不改动已发布 iOS 版本。
 
 Windows 云客户端配置经用户明确授权保存为 GitHub Actions 的 CLOUD_CONFIG_WINDOWS 加密 Secret，无账号登录令牌或书籍，未写入源码。Windows Release 在 GitHub 构建并暂存到草稿 Release，随后加入本机签名的 macOS 包与沿用原测试签名的 Android Release APK。修复 CI 模拟器临时 Run 配置，拆分 Android 构建并关闭桌面 fail-fast，避免平台间相互取消。依赖升级后静态检查及 42 项回归通过。结果与资产下载链接另存 dist/three-platform-release-status.json。
+
+三平台发布续接：Android 1.0.7（10）APK 与 Developer ID 签名 macOS 1.0.7（10）ZIP 已生成并核验版本，位于 dist/。GitHub 提交 542751e 已触发 Windows 构建，插件在 C++20 下因 wchar_t* 输出到窄字符流失败（C2280／C2088）；本地已切回 C++17 并限定插件使用编译器建议的协程兼容宏，尚未上传或验证。Windows 仍按 1.0.8（10）同批次重试，不再次滚动版本。GitHub Release apps-build10 尚未创建／发布，三个安装包还未公开下载。详见 dist/three-platform-release-status.json。

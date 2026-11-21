@@ -57,10 +57,11 @@ add_subdirectory("runner")
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
-# Modern WinRT headers use standard coroutines with C++20. Keep this scoped
-# to the media controls plugin rather than suppressing MSVC's legacy errors.
+# This plugin still uses C++17 stream operators removed in C++20. Keep its
+# legacy WinRT coroutine compatibility setting scoped to this target.
 if(TARGET audio_service_win_plugin)
-  target_compile_features(audio_service_win_plugin PRIVATE cxx_std_20)
+  target_compile_definitions(audio_service_win_plugin PRIVATE
+    _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
 endif()
 
 
