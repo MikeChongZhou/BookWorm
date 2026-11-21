@@ -22,7 +22,7 @@ jobs:
       - name: Setup Flutter SDK
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          flutter-version: '3.47.1'
           cache: true
 
       # 2. 获取依赖 & 自动检测代码生成
@@ -35,12 +35,28 @@ jobs:
             dart run build_runner build --delete-conflicting-outputs
           }
 
+      - name: Prepare cloud configuration
+        shell: pwsh
+        env:
+          CLOUD_CONFIG_WINDOWS: ${{ secrets.CLOUD_CONFIG_WINDOWS }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CLOUD_CONFIG_WINDOWS)) {
+            throw "CLOUD_CONFIG_WINDOWS is required for a distributable cloud-enabled app."
+          }
+          [IO.File]::WriteAllText((Join-Path $PWD 'cloud-config.windows.ci.json'), $env:CLOUD_CONFIG_WINDOWS, [Text.UTF8Encoding]::new($false))
+
       # 3. 编译 Windows Release 版本
       - name: Build Windows Release
         shell: pwsh
         run: |
           flutter config --enable-windows-desktop
-          flutter build windows --release
+          $spec = Get-Content release/platforms.json -Raw | ConvertFrom-Json
+          $version = $spec.windows.version
+          $build = $spec.windows.build
+          "BOOKWORM_RELEASE_TAG=$($spec.release_tag)" >> $env:GITHUB_ENV
+          "BOOKWORM_WINDOWS_VERSION=$version" >> $env:GITHUB_ENV
+          "BOOKWORM_WINDOWS_BUILD=$build" >> $env:GITHUB_ENV
+          flutter build windows --release --build-name $version --build-number $build --dart-define-from-file=cloud-config.windows.ci.json
 
       # 4. 自动识别新旧 Flutter 产物路径并打包为 zip
       - name: Archive Windows Release
@@ -54,20 +70,32 @@ jobs:
             Write-Error "未找到 Windows 编译输出目录！"
             exit 1
           }
-          Compress-Archive -Path "$releaseDir\*" -DestinationPath "BookWorm-Windows-x64.zip" -Force
+          Compress-Archive -Path "$releaseDir\*" -DestinationPath "BookWorm-$env:BOOKWORM_WINDOWS_VERSION-build$env:BOOKWORM_WINDOWS_BUILD-Windows-x64.zip" -Force
 
       # 5. 上传为 Actions 临时产物（每次运行后在 Actions 页面底部下载）
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: BookWorm-Windows-x64
-          path: BookWorm-Windows-x64.zip
+          path: BookWorm-*-Windows-x64.zip
           retention-days: 30
 
-      # 6. 推送 v* 标签时，自动创建 GitHub Release 并生成永久下载链接
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Stage Windows installer in GitHub Release
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'Release three platforms:')
         uses: softprops/action-gh-release@v2
         with:
-          files: BookWorm-Windows-x64.zip
-          generate_release_notes: true
+          tag_name: ${{ env.BOOKWORM_RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          name: BookWorm 三平台安装包（Build 10）
+          draft: true
+          files: BookWorm-*-Windows-x64.zip
+          body: |
+            本次更新包含 History 阅读统计、书源网站、兼容 Melo 模型网址和自动最远进度同步。
+
+            | 平台 | 版本 | 说明 |
+            |---|---|---|
+            | Android | 1.0.7 (10) | Release 运行模式，沿用现有测试签名 |
+            | macOS | 1.0.7 (10) | Developer ID 签名，未公证 |
+            | Windows x64 | 1.0.8 (10) | 便携 ZIP，解压后运行 bookworm.exe，未签名 |
+
+            iOS 仍使用已上传 TestFlight 的 1.0.7 (9)，本次未变更。

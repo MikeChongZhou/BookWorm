@@ -1,0 +1,7 @@
+{
+  "release_tag": "apps-build10",
+  "android": {"version": "1.0.7", "build": 10, "signing": "existing local test key"},
+  "macos": {"version": "1.0.7", "build": 10, "signing": "Developer ID"},
+  "windows": {"version": "1.0.8", "build": 10, "signing": "unsigned"},
+  "ios": {"version": "1.0.7", "build": 9, "distribution": "existing TestFlight build; unchanged"}
+}

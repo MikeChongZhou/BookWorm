@@ -134,3 +134,9 @@ macOS 真实 OneDrive 登录与示例书同步成功，重启后再次同步成�
 ## 2026-11-20 / 1.0.7 (9) — 发布准备
 
 用户授权升级并上传 GitHub／TestFlight，本批版本统一升级为 1.0.7（9）。包含 History 统计与清单、书籍网站与兼容模型网址、自动最远进度合并、iOS 音频交接及系统中断恢复。42 项常规回归、静态检查，以及真实书源下载、兼容模型网址下载／校验／推理、模拟器锁屏跨章测试均已通过；正常 Release 测试版已安装并独立启动于 Mike Backup iPhone。30–60 分钟真机长测、Windows 原生构建及大陆网络可用性仍未验收。提交结果与 Apple 回执另存 dist/BookWorm-1.0.7-build9-release-status.json。
+
+## 2026-11-20 / 三平台分发构建 10
+
+用户要求 Android／macOS／Windows 安装包由 GitHub 提供。三平台功能共用已发布源码；Windows 媒体插件升级 0.0.6、限定 C++20，修复新 MSVC 误入实验协程头的编译错误；Windows 应用版本升级 1.0.8（10）。Android／macOS 本轮只重新分发，保留产品版本 1.0.7 并滚动构建号至 10；iOS 保持 1.0.7（9）。版本由 release/platforms.json 及显式构建参数管理，不改动已发布 iOS 版本。
+
+Windows 云客户端配置经用户明确授权保存为 GitHub Actions 的 CLOUD_CONFIG_WINDOWS 加密 Secret，无账号登录令牌或书籍，未写入源码。Windows Release 在 GitHub 构建并暂存到草稿 Release，随后加入本机签名的 macOS 包与沿用原测试签名的 Android Release APK。修复 CI 模拟器临时 Run 配置，拆分 Android 构建并关闭桌面 fail-fast，避免平台间相互取消。依赖升级后静态检查及 42 项回归通过。结果与资产下载链接另存 dist/three-platform-release-status.json。
