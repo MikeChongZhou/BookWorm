@@ -29,11 +29,23 @@ android {
         versionName = flutter.versionName
     }
 
+    val ciKeystore = System.getenv("BOOKWORM_ANDROID_KEYSTORE")
+    signingConfigs {
+        if (!ciKeystore.isNullOrBlank()) {
+            create("ciRelease") {
+                storeFile = file(ciKeystore)
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // CI uses the existing app signing identity from encrypted secrets.
+            // Local testing keeps its original signing behavior.
+            signingConfig = signingConfigs.getByName(if (ciKeystore.isNullOrBlank()) "debug" else "ciRelease")
         }
     }
 }

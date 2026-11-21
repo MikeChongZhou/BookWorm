@@ -1,0 +1,123 @@
+name: Release BookWorm apps
+on:
+  workflow_dispatch:
+  push:
+    tags: ['apps-build*']
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: android
+            os: ubuntu-latest
+          - platform: macos
+            os: macos-latest
+          - platform: windows
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - id: meta
+        run: python scripts/ci/release_tools.py meta ${{ matrix.platform }}
+      - if: startsWith(github.ref, 'refs/tags/')
+        env:
+          EXPECTED: ${{ steps.meta.outputs.tag }}
+        run: test "$GITHUB_REF_NAME" = "$EXPECTED"
+      - if: matrix.platform == 'android'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.1'
+          cache: true
+      - name: Prepare private build configuration
+        env:
+          CLOUD_CONFIG_ANDROID: ${{ secrets.CLOUD_CONFIG_ANDROID }}
+          CLOUD_CONFIG_APPLE: ${{ secrets.CLOUD_CONFIG_APPLE }}
+          CLOUD_CONFIG_WINDOWS: ${{ secrets.CLOUD_CONFIG_WINDOWS }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          MACOS_P12_BASE64: ${{ secrets.MACOS_P12_BASE64 }}
+          MACOS_PROFILE_BASE64: ${{ secrets.MACOS_PROFILE_BASE64 }}
+          MACOS_P12_PASSWORD: ${{ secrets.MACOS_P12_PASSWORD }}
+        run: python scripts/ci/release_tools.py configure ${{ matrix.platform }}
+      - run: python -m unittest discover -s scripts/ci -p "test_*.py"
+      - run: flutter pub get
+      - if: matrix.platform == 'android'
+        name: Build signed Android release
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: flutter build apk --release --build-name=${{ steps.meta.outputs.version }} --build-number=${{ steps.meta.outputs.build }} --dart-define-from-file=cloud-config.release.json
+      - if: matrix.platform == 'windows'
+        name: Build Windows release
+        run: flutter build windows --release --build-name=${{ steps.meta.outputs.version }} --build-number=${{ steps.meta.outputs.build }} --dart-define-from-file=cloud-config.release.json
+      - if: matrix.platform == 'macos'
+        name: Build macOS release
+        run: |
+          flutter build macos --release --config-only --build-name=${{ steps.meta.outputs.version }} --build-number=${{ steps.meta.outputs.build }} --dart-define-from-file=cloud-config.release.json
+          (cd macos && pod install)
+          xcodebuild -workspace macos/Runner.xcworkspace -scheme Runner -configuration Release -derivedDataPath build/macos CODE_SIGNING_ALLOWED=NO build
+      - if: matrix.platform == 'macos'
+        name: Sign and package macOS
+        env:
+          MACOS_P12_PASSWORD: ${{ secrets.MACOS_P12_PASSWORD }}
+        run: python scripts/ci/sign_macos.py
+      - if: matrix.platform != 'macos'
+        run: python scripts/ci/release_tools.py package ${{ matrix.platform }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: dist/${{ steps.meta.outputs.asset }}
+          if-no-files-found: error
+          retention-days: 7
+      - if: always()
+        name: Remove staged credentials
+        run: python scripts/ci/release_tools.py cleanup
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: dist
+      - id: meta
+        run: python scripts/ci/release_tools.py meta windows
+      - run: python scripts/ci/release_tools.py finalize
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: BookWorm ${{ steps.meta.outputs.tag }}
+          draft: false
+          body_path: dist/RELEASE_NOTES.md
+          fail_on_unmatched_files: true
+          files: |
+            dist/*.apk
+            dist/*.zip
+            dist/SHA256SUMS.txt

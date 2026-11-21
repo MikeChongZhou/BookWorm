@@ -1,14 +1,10 @@
 name: Build Flutter Windows App
 
 on:
-  push:
-    branches: [ main, master ]
-    tags:
-      - 'v*' # 推送 v1.0.0 等标签时自动触发 Release 发布
-  workflow_dispatch: # 支持在 Actions 页面手动点击运行
+  workflow_dispatch: # Manual Windows diagnostic build; releases use release-apps.yml
 
 permissions:
-  contents: write # 赋予创建 Release 和上传附件的权限
+  contents: read
 
 jobs:
   build-windows:
@@ -79,23 +75,3 @@ jobs:
           name: BookWorm-Windows-x64
           path: BookWorm-*-Windows-x64.zip
           retention-days: 30
-
-      - name: Stage Windows installer in GitHub Release
-        if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'Release three platforms:')
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.BOOKWORM_RELEASE_TAG }}
-          target_commitish: ${{ github.sha }}
-          name: BookWorm 三平台安装包（Build 10）
-          draft: true
-          files: BookWorm-*-Windows-x64.zip
-          body: |
-            本次更新包含 History 阅读统计、书源网站、兼容 Melo 模型网址和自动最远进度同步。
-
-            | 平台 | 版本 | 说明 |
-            |---|---|---|
-            | Android | 1.0.7 (10) | Release 运行模式，沿用现有测试签名 |
-            | macOS | 1.0.7 (10) | Developer ID 签名，未公证 |
-            | Windows x64 | 1.0.8 (10) | 便携 ZIP，解压后运行 bookworm.exe，未签名 |
-
-            iOS 仍使用已上传 TestFlight 的 1.0.7 (9)，本次未变更。
