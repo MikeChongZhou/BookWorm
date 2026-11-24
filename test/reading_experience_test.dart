@@ -439,14 +439,14 @@ void main() {
       }
       await tester.fling(
         find.byType(RichText).first,
-        const Offset(400, 0),
+        const Offset(-400, 0),
         1000,
       );
       await tester.pumpAndSettle();
       expect(book.offset, greaterThan(0));
       await tester.fling(
         find.byType(RichText).first,
-        const Offset(-400, 0),
+        const Offset(400, 0),
         1000,
       );
       await tester.pumpAndSettle();
