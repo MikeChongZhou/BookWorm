@@ -47,17 +47,64 @@ class LocalLibrary {
     return task;
   }
 
-  Future<void> save(LocalBook b, {bool contentChanged = false}) {
+  Future<void> _saveNow(LocalBook b, {bool contentChanged = false}) async {
     final position = utf8.encode(jsonEncode(b.position()));
-    return serialized(() async {
-      if (contentChanged || !identical(_savedContents[b.id], b.sections)) {
-        final payload = b.toJson();
-        final bytes = await compute(encodeBook, payload);
-        await _atomic(File(_path(b.id, 'json')), bytes);
-        _savedContents[b.id] = b.sections;
-      }
-      await _atomic(File(_path(b.id, 'position')), position);
+    if (contentChanged || !identical(_savedContents[b.id], b.sections)) {
+      final bytes = await compute(encodeBook, b.toJson());
+      await _atomic(File(_path(b.id, 'json')), bytes);
+      _savedContents[b.id] = b.sections;
+    }
+    await _atomic(File(_path(b.id, 'position')), position);
+  }
+
+  Future<void> save(LocalBook b, {bool contentChanged = false}) =>
+      serialized(() => _saveNow(b, contentChanged: contentChanged));
+
+  // Publish metadata last. Concurrent downloads of the same book never replace
+  // an existing book or its reading/listening position.
+  Future<bool> install(LocalBook book, Uint8List bytes) async {
+    var installed = false;
+    await serialized(() async {
+      if (await File(_path(book.id, 'json')).exists()) return;
+      await _atomic(File(_path(book.id, 'source')), bytes);
+      await _saveNow(book);
+      installed = true;
     });
+    return installed;
+  }
+
+  // Merge only an idle book, inside the local write queue, so a cloud snapshot
+  // cannot overwrite a newer local save or a book opened while sync was waiting.
+  Future<bool> saveRemotePosition(
+    LocalBook book, {
+    required bool Function() isActive,
+  }) async {
+    var saved = false;
+    await serialized(() async {
+      if (isActive()) return;
+      final file = File(_path(book.id, 'position'));
+      if (await file.exists()) {
+        final current = Map<String, dynamic>.from(
+          jsonDecode(await file.readAsString()),
+        );
+        final section = current['section'] as int;
+        final offset = current['offset'] as int;
+        final audio = current['audioOffsetMs'] as int? ?? 0;
+        if (section > book.section ||
+            (section == book.section &&
+                (offset > book.offset ||
+                    (offset == book.offset && audio >= book.audioOffsetMs)))) {
+          return;
+        }
+      }
+      if (isActive()) return;
+      await _atomic(
+        File(_path(book.id, 'position')),
+        utf8.encode(jsonEncode(book.position())),
+      );
+      saved = true;
+    });
+    return saved;
   }
 
   Future<void> source(String id, Uint8List bytes) =>

@@ -965,12 +965,12 @@ class _ReaderScreenState extends State<ReaderScreen>
           behavior: HitTestBehavior.opaque,
           onHorizontalDragEnd: (d) {
             if ((d.primaryVelocity ?? 0).abs() > 50) {
-              unawaited(turnPage(d.primaryVelocity! < 0 ? -1 : 1));
+              unawaited(turnPage(d.primaryVelocity! < 0 ? 1 : -1));
             }
           },
           onVerticalDragEnd: (d) {
             if ((d.primaryVelocity ?? 0).abs() > 50) {
-              unawaited(turnPage(d.primaryVelocity! < 0 ? -1 : 1));
+              unawaited(turnPage(d.primaryVelocity! < 0 ? 1 : -1));
             }
           },
           child: Column(

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
@@ -48,6 +49,7 @@ class LibrarySync {
     CloudProvider cloud, {
     void Function(String)? status,
     bool Function()? yieldRequested,
+    LocalBook? Function(String id)? liveBook,
   }) async {
     final result = SyncResult();
     status?.call('正在检查私人云文件');
@@ -100,7 +102,12 @@ class LibrarySync {
       await cloud.write(
         'position-${book.id}-$deviceId.json',
         Uint8List.fromList(
-          utf8.encode(jsonEncode({...book.position(), 'device': deviceId})),
+          utf8.encode(
+            jsonEncode({
+              ...((liveBook?.call(book.id) ?? book).position()),
+              'device': deviceId,
+            }),
+          ),
         ),
       );
     }
@@ -126,38 +133,46 @@ class LibrarySync {
       status?.call('下载本地文件中，已下载 ${result.downloaded} 个文件');
       final parts = manifest['parts'] as List;
       if (parts.length > 1000) throw const CloudFailure('云文件块数过多');
-      final builder = BytesBuilder(copy: false);
-      var total = 0;
-      for (var index = 0; index < parts.length; index++) {
-        final part = parts[index];
-        if (part['key'] != 'book-$id-$index.part') {
-          throw const CloudFailure('云内容路径不匹配');
+      await library.root.create(recursive: true);
+      final staging = await library.root.createTemp('.cloud-download-');
+      final partial = File('${staging.path}/book.part');
+      final output = await partial.open(mode: FileMode.write);
+      try {
+        var total = 0;
+        for (var index = 0; index < parts.length; index++) {
+          final part = parts[index];
+          if (part['key'] != 'book-$id-$index.part') {
+            throw const CloudFailure('云内容路径不匹配');
+          }
+          final bytes = await cloud.read(part['key']);
+          if (yieldRequested?.call() == true) {
+            result.deferred = true;
+            return result;
+          }
+          total += bytes.length;
+          if (total > 100 * 1024 * 1024 ||
+              bytes.length != part['size'] ||
+              sha256.convert(bytes).toString() != part['hash']) {
+            throw const CloudFailure('私人云文件校验失败，本机内容未覆盖');
+          }
+          await output.writeFrom(bytes);
         }
-        final bytes = await cloud.read(part['key']);
-        if (yieldRequested?.call() == true) {
-          result.deferred = true;
-          return result;
+        await output.flush();
+        final (book, source) = await compute(
+          decodeCloudBook,
+          await partial.readAsBytes(),
+        );
+        if (book.id != id || sha256.convert(source).toString() != id) {
+          throw const CloudFailure('书籍原件校验失败');
         }
-        total += bytes.length;
-        if (total > 100 * 1024 * 1024 ||
-            bytes.length != part['size'] ||
-            sha256.convert(bytes).toString() != part['hash']) {
-          throw const CloudFailure('私人云文件校验失败，本机内容未覆盖');
-        }
-        builder.add(bytes);
+        await library.install(book, source);
+        localIds.add(id);
+        result.downloaded++;
+        status?.call('下载本地文件中，已下载 ${result.downloaded} 个文件');
+      } finally {
+        await output.close();
+        await staging.delete(recursive: true);
       }
-      final (book, source) = await compute(
-        decodeCloudBook,
-        builder.takeBytes(),
-      );
-      if (book.id != id || sha256.convert(source).toString() != id) {
-        throw const CloudFailure('书籍原件校验失败');
-      }
-      await library.source(id, source);
-      await library.save(book);
-      localIds.add(id);
-      result.downloaded++;
-      status?.call('下载本地文件中，已下载 ${result.downloaded} 个文件');
     }
     local = await library.load();
     status?.call('正在同步阅读进度');
@@ -174,7 +189,7 @@ class LibrarySync {
         jsonDecode(utf8.decode(await cloud.read(key))),
       );
       final b = map[p['id']];
-      if (b == null) continue;
+      if (b == null || liveBook?.call(b.id) != null) continue;
       final section = p['section'] as int, offset = p['offset'] as int;
       if (section < 0 ||
           section >= b.sections.length ||
@@ -207,7 +222,13 @@ class LibrarySync {
         result.deferred = true;
         return result;
       }
-      await library.save(b);
+      // Recheck after asynchronous cloud reads: the reader may have opened it.
+      if (liveBook?.call(b.id) != null) continue;
+      final saved = await library.saveRemotePosition(
+        b,
+        isActive: () => liveBook?.call(b.id) != null,
+      );
+      if (!saved) continue;
       await cloud.write(
         'position-${b.id}-$deviceId.json',
         Uint8List.fromList(

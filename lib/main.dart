@@ -261,7 +261,7 @@ class _LibraryScreenState extends State<LibraryScreen>
           ),
           if (hasRemotePositions)
             TextButton(
-              onPressed: busy || consuming ? null : () => sync(),
+              onPressed: busy || syncing ? null : () => sync(),
               child: Text(t('检查其他设备进度')),
             ),
         ],
@@ -299,6 +299,13 @@ class _LibraryScreenState extends State<LibraryScreen>
   bool deferredCloudSync = false;
   bool hasRemotePositions = false;
   String? openingBook;
+  LocalBook? readingBook;
+  LocalBook? liveBook(String id) {
+    if (readingBook?.id == id) return readingBook;
+    final player = BookAudioHandler.instance?.player;
+    return player?.book.id == id ? player!.book : null;
+  }
+
   bool get consuming =>
       reading ||
       (BookAudioHandler.instance?.player?.playing ?? false) ||
@@ -323,7 +330,6 @@ class _LibraryScreenState extends State<LibraryScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    catalog.shouldYield = () => consuming;
     appMenu.setMethodCallHandler((call) async {
       if (call.method == 'showAbout') unawaited(openAbout());
       if (call.method == 'showSettings') unawaited(openSettings());
@@ -331,7 +337,7 @@ class _LibraryScreenState extends State<LibraryScreen>
     unawaited(load());
     autoSync = Timer.periodic(const Duration(hours: 1), (_) {
       unawaited(dailySync());
-      if (!consuming) unawaited(catalog.refreshDaily());
+      unawaited(catalog.refreshDaily());
     });
   }
 
@@ -347,10 +353,7 @@ class _LibraryScreenState extends State<LibraryScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed &&
-        active != null &&
-        !reading &&
-        !busy) {
+    if (state == AppLifecycleState.resumed && active != null && !busy) {
       unawaited(dailySync());
     }
   }
@@ -426,8 +429,7 @@ class _LibraryScreenState extends State<LibraryScreen>
         toast(t('这本书已在书架，保留原有进度'));
         return;
       }
-      await store!.source(book.id, bytes);
-      await store!.save(book);
+      await store!.install(book, bytes);
       await refresh();
       toast(t('已导入《${book.title}》'));
     } catch (e) {
@@ -449,7 +451,7 @@ class _LibraryScreenState extends State<LibraryScreen>
     bool autoPlay = true,
   }) async {
     if (store == null || openingBook != null || reading) return;
-    if (busy && !syncing) {
+    if (busy) {
       toast(t('正在处理书籍，请稍候'));
       return;
     }
@@ -457,6 +459,7 @@ class _LibraryScreenState extends State<LibraryScreen>
     final current = BookAudioHandler.instance?.player;
     if (current != null && current.book.id == book.id) book = current.book;
     reading = true;
+    readingBook = book;
     try {
       await WidgetsBinding.instance.endOfFrame;
       final bytes = book.format == 'pdf'
@@ -481,6 +484,7 @@ class _LibraryScreenState extends State<LibraryScreen>
       toast(t('无法打开书籍：$e'));
     } finally {
       reading = false;
+      readingBook = null;
       if (mounted) update(() => openingBook = null);
     }
     if (catalog.deferred && !consuming) unawaited(catalog.refreshDaily());
@@ -491,7 +495,7 @@ class _LibraryScreenState extends State<LibraryScreen>
     final cloud = active;
     if (cloud == null ||
         busy ||
-        consuming ||
+        syncing ||
         prefs == null ||
         checkingDailySync) {
       return;
@@ -511,21 +515,16 @@ class _LibraryScreenState extends State<LibraryScreen>
   }
 
   Future<void> sync({bool automatic = false}) async {
-    if (consuming) {
-      update(() => status = t('同步已延后，优先读书与听书'));
-      return;
-    }
     final cloud = active;
-    if (cloud == null || busy || reading || store == null) return;
+    if (cloud == null || busy || syncing || store == null) return;
     update(() {
-      busy = true;
       syncing = true;
       status = t('连接 ${cloud.name}');
     });
     try {
       final result = await LibrarySync(store!, device).run(
         cloud,
-        yieldRequested: () => consuming,
+        liveBook: liveBook,
         status: (s) {
           if (mounted) update(() => status = t(s));
         },
@@ -533,16 +532,6 @@ class _LibraryScreenState extends State<LibraryScreen>
       deferredCloudSync = result.deferred;
       if (result.deferred) {
         await prefs?.remove('bookworm_sync_day_${cloud.name}');
-      }
-      if (reading) {
-        update(
-          () => status = t(
-            result.deferred
-                ? '同步已延后，优先读书与听书'
-                : '同步完成：已上传 ${result.uploaded} 个文件，已下载 ${result.downloaded} 个文件',
-          ),
-        );
-        return;
       }
       await refresh();
       // Sync has already persisted the furthest position, independent of timestamps.
@@ -584,7 +573,6 @@ class _LibraryScreenState extends State<LibraryScreen>
     } finally {
       if (mounted) {
         update(() {
-          busy = false;
           syncing = false;
         });
       }
@@ -592,7 +580,7 @@ class _LibraryScreenState extends State<LibraryScreen>
   }
 
   Future<void> connect(CloudProvider cloud) async {
-    if (busy) return;
+    if (busy || syncing) return;
     if (!cloud.configured) {
       await showCloudUnavailable(context, cloud.name);
       return;
@@ -694,7 +682,7 @@ class _LibraryScreenState extends State<LibraryScreen>
             ),
             trailing: cloud.configured
                 ? OutlinedButton(
-                    onPressed: busy ? null : () => connect(cloud),
+                    onPressed: busy || syncing ? null : () => connect(cloud),
                     child: Text(active == cloud ? t('重新授权') : t('连接')),
                   )
                 : TextButton(
@@ -710,12 +698,12 @@ class _LibraryScreenState extends State<LibraryScreen>
           spacing: 12,
           children: [
             FilledButton.icon(
-              onPressed: busy ? null : sync,
+              onPressed: busy || syncing ? null : sync,
               icon: Icon(Icons.sync),
               label: Text(t('立即同步')),
             ),
             TextButton(
-              onPressed: busy
+              onPressed: busy || syncing
                   ? null
                   : () async {
                       await active!.disconnect();
@@ -820,7 +808,7 @@ class _LibraryScreenState extends State<LibraryScreen>
                         ),
                         if (active != null)
                           IconButton(
-                            onPressed: busy ? null : sync,
+                            onPressed: busy || syncing ? null : sync,
                             tooltip: t('同步私人云'),
                             icon: Icon(Icons.sync),
                           ),

@@ -353,6 +353,8 @@ class BookCatalog extends ChangeNotifier {
     _notify();
     final transfer = http.Client();
     _transfers.add(transfer);
+    Directory? staging;
+    RandomAccessFile? sink;
     try {
       Uri url;
       if (item.source == '文硕阁') {
@@ -434,7 +436,11 @@ class BookCatalog extends ChangeNotifier {
       if ((response.contentLength ?? 0) > BookImporter.maxBytes) {
         throw const FormatException('书籍超过 50 MB 限制');
       }
-      final bytes = BytesBuilder(copy: false);
+      staging = await (await getTemporaryDirectory()).createTemp(
+        'bookworm-download-',
+      );
+      final partial = File('${staging.path}/book.part');
+      sink = await partial.open(mode: FileMode.write);
       var received = 0;
       var last = DateTime.now();
       await for (final chunk in response.stream.timeout(
@@ -444,7 +450,7 @@ class BookCatalog extends ChangeNotifier {
         if (received > BookImporter.maxBytes) {
           throw const FormatException('书籍超过 50 MB 限制');
         }
-        bytes.add(chunk);
+        await sink.writeFrom(chunk);
         if (DateTime.now().difference(last).inMilliseconds > 250) {
           downloadStates[item.id] =
               '下载中 · ${(received / 1048576).toStringAsFixed(1)} MB';
@@ -459,9 +465,12 @@ class BookCatalog extends ChangeNotifier {
           received != response.contentLength) {
         throw const FormatException('下载不完整');
       }
+      await sink.flush();
+      await sink.close();
+      sink = null;
       downloadStates[item.id] = '正在导入本地书架';
       _notify();
-      final data = bytes.takeBytes();
+      final data = await partial.readAsBytes();
       final extension = customSources.contains(item.source)
           ? item.format
           : 'epub';
@@ -469,10 +478,7 @@ class BookCatalog extends ChangeNotifier {
       final existing = (await library.load())
           .where((b) => b.id == book.id)
           .firstOrNull;
-      if (existing == null) {
-        await library.source(book.id, data);
-        await library.save(book);
-      }
+      if (existing == null) await library.install(book, data);
       completed.add(item.id);
       await (await SharedPreferences.getInstance()).setStringList(
         'catalog_downloaded',
@@ -484,6 +490,20 @@ class BookCatalog extends ChangeNotifier {
       downloadStates[item.id] = '下载未完成，可重试：$e';
     } finally {
       transfer.close();
+      if (sink != null) {
+        try {
+          await sink.close();
+        } catch (_) {
+          /* Preserve the download error. */
+        }
+      }
+      if (staging != null) {
+        try {
+          await staging.delete(recursive: true);
+        } catch (_) {
+          /* Temporary cleanup can retry on OS maintenance. */
+        }
+      }
       _transfers.remove(transfer);
       _downloading.remove(item.id);
       _notify();

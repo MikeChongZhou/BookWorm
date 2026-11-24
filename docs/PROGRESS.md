@@ -142,3 +142,10 @@ macOS 真实 OneDrive 登录与示例书同步成功，重启后再次同步成�
 Windows 云客户端配置经用户明确授权保存为 GitHub Actions 的 CLOUD_CONFIG_WINDOWS 加密 Secret，无账号登录令牌或书籍，未写入源码。Windows Release 在 GitHub 构建并暂存到草稿 Release，随后加入本机签名的 macOS 包与沿用原测试签名的 Android Release APK。修复 CI 模拟器临时 Run 配置，拆分 Android 构建并关闭桌面 fail-fast，避免平台间相互取消。依赖升级后静态检查及 42 项回归通过。结果与资产下载链接另存 dist/three-platform-release-status.json。
 
 三平台发布续接：Android 1.0.7（10）APK 与 Developer ID 签名 macOS 1.0.7（10）ZIP 已生成并核验版本，位于 dist/。GitHub 提交 542751e 已触发 Windows 构建，插件在 C++20 下因 wchar_t* 输出到窄字符流失败（C2280／C2088）；本地已切回 C++17 并限定插件使用编译器建议的协程兼容宏，尚未上传或验证。Windows 仍按 1.0.8（10）同批次重试，不再次滚动版本。GitHub Release apps-build10 尚未创建／发布，三个安装包还未公开下载。详见 dist/three-platform-release-status.json。
+
+
+## 2026-11-23 并发读听与翻页方向发布
+
+本批共享实现更新：阅读、听书不再延后私人云传输或公版目录刷新；云同步状态与书籍处理状态分离。公版及私人云下载先写临时文件，完成并校验后再发布到书库；重复入库在写入队列中检查，保留已有书籍进度。正在使用的书籍不被远端进度跳转，闲置书籍合并时复核最新本地进度。左滑、上滑下一页，右滑、下滑上一页。
+
+上传版本：iOS／Android／macOS 1.0.8（11），Windows 1.0.9（11）；本地 iOS Pods 已按锁文件恢复，未升级插件。修改后的 Dart 静态检查通过。按用户要求不运行模拟测试，交由用户验收。GitHub 和 TestFlight 最终提交回执另存 dist。

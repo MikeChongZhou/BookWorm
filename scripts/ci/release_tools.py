@@ -21,7 +21,7 @@ def spec(platform):
         raise ValueError('Invalid release version')
     if not re.fullmatch(r'apps-build\d+', data['release_tag']):
         raise ValueError('Invalid release tag')
-    suffix = {'android': 'Android-test-signed.apk', 'macos': 'macOS.zip', 'windows': 'Windows-x64.zip'}[platform]
+    suffix = {'ios': 'iOS.ipa', 'android': 'Android-test-signed.apk', 'macos': 'macOS.zip', 'windows': 'Windows-x64.zip'}[platform]
     return {**value, 'tag': data['release_tag'], 'asset': f"BookWorm-{value['version']}-build{value['build']}-{suffix}"}
 
 
@@ -108,7 +108,7 @@ def finalize():
         meta = spec(platform)
         notes.append(f"| {platform} | {meta['version']} ({meta['build']}) | {descriptions[platform]} |")
     notes += ['', '安装包校验值见 SHA256SUMS.txt。Windows 为 CI 编译验证，未完成 Windows 实机验收。',
-              'iOS 保持已上传 TestFlight 的 1.0.7（9），本次不重新分发。']
+              f"iOS {spec('ios')['version']}（{spec('ios')['build']}）通过独立 TestFlight 流程提交；本工作流不分发 iOS 安装包。"]
     (ROOT / 'dist/RELEASE_NOTES.md').write_text('\n'.join(notes), encoding='utf-8')
 
 
