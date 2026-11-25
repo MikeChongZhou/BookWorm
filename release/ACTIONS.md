@@ -22,3 +22,7 @@ Android、macOS、Windows 安装包全部在 GitHub 托管 runner 上从源码�
 签名私钥是敏感凭据，首次传入 GitHub 需要单独授权。不要上传整个钥匙串、读者书籍、云登录令牌，或将配置写进源码。凭据只在 runner 临时目录使用，完成后清理；构建产物上传步骤只接收指定安装包。
 
 Android 沿用原测试签名以保持覆盖安装兼容；macOS 为 Developer ID 签名但尚未公证；Windows 为未签名便携包。GitHub 工作流写入权限拥有者可能通过修改工作流使用仓库 Secrets，应限制仓库写入权限。
+
+## Windows 独立正式包
+
+`Release Windows app`（build-windows.yml）可在 Actions 手动启动，或推送与 Windows 清单一致的 `windows-v版本-build构建号` 标签自动启动。它仅编译 Windows Release，带私人云配置与 Release CRT，在 CI 检查所有原生二进制无 Debug CRT 依赖并启动实际 exe，通过后自动发布 GitHub Release。普通 `Build BookWorm apps` 的 Debug artifacts 仅供开发，不用于用户安装。Windows 版本单独维护，其他三端不因这次 Windows 包修复而升级。

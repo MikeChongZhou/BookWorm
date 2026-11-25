@@ -11,8 +11,8 @@
     "signing": "Developer ID"
   },
   "windows": {
-    "version": "1.0.9",
-    "build": 11,
+    "version": "1.0.10",
+    "build": 12,
     "signing": "unsigned"
   },
   "ios": {

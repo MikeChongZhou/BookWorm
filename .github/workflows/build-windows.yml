@@ -1,77 +1,84 @@
-name: Build Flutter Windows App
-
+name: Release Windows app
 on:
-  workflow_dispatch: # Manual Windows diagnostic build; releases use release-apps.yml
-
+  workflow_dispatch:
+  push:
+    tags: ['windows-v*']
 permissions:
   contents: read
-
+concurrency:
+  group: windows-release-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   build-windows:
     runs-on: windows-latest
-
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: pwsh
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      # 1. 配置 Flutter SDK 环境（默认使用最新稳定版）
-      - name: Setup Flutter SDK
-        uses: subosito/flutter-action@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.1'
           cache: true
-
-      # 2. 获取依赖 & 自动检测代码生成
-      - name: Install dependencies & Codegen
-        shell: pwsh
+      - id: meta
         run: |
-          flutter pub get
-          # 如果 pubspec.yaml 中包含 build_runner，则自动执行代码生成
-          if (Select-String -Path "pubspec.yaml" -Pattern "build_runner" -Quiet) {
-            dart run build_runner build --delete-conflicting-outputs
-          }
-
-      - name: Prepare cloud configuration
-        shell: pwsh
+          $spec = Get-Content release/platforms.json -Raw | ConvertFrom-Json
+          "version=$($spec.windows.version)" >> $env:GITHUB_OUTPUT
+          "build=$($spec.windows.build)" >> $env:GITHUB_OUTPUT
+          "tag=windows-v$($spec.windows.version)-build$($spec.windows.build)" >> $env:GITHUB_OUTPUT
+          "asset=BookWorm-$($spec.windows.version)-build$($spec.windows.build)-Windows-x64.zip" >> $env:GITHUB_OUTPUT
+      - if: startsWith(github.ref, 'refs/tags/')
+        env:
+          EXPECTED: ${{ steps.meta.outputs.tag }}
+        run: if ($env:GITHUB_REF_NAME -ne $env:EXPECTED) { throw 'Tag does not match platform version' }
+      - name: Prepare private cloud configuration
         env:
           CLOUD_CONFIG_WINDOWS: ${{ secrets.CLOUD_CONFIG_WINDOWS }}
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:CLOUD_CONFIG_WINDOWS)) {
-            throw "CLOUD_CONFIG_WINDOWS is required for a distributable cloud-enabled app."
-          }
-          [IO.File]::WriteAllText((Join-Path $PWD 'cloud-config.windows.ci.json'), $env:CLOUD_CONFIG_WINDOWS, [Text.UTF8Encoding]::new($false))
-
-      # 3. 编译 Windows Release 版本
+        run: python scripts/ci/release_tools.py configure windows
+      - run: flutter pub get
       - name: Build Windows Release
-        shell: pwsh
+        run: flutter build windows --release --build-name=${{ steps.meta.outputs.version }} --build-number=${{ steps.meta.outputs.build }} --dart-define-from-file=cloud-config.release.json
+      - name: Verify runtime dependencies and executable startup
+        run: ./scripts/ci/check_windows_runtime.ps1
+      - name: Package Release
         run: |
-          flutter config --enable-windows-desktop
-          $spec = Get-Content release/platforms.json -Raw | ConvertFrom-Json
-          $version = $spec.windows.version
-          $build = $spec.windows.build
-          "BOOKWORM_RELEASE_TAG=$($spec.release_tag)" >> $env:GITHUB_ENV
-          "BOOKWORM_WINDOWS_VERSION=$version" >> $env:GITHUB_ENV
-          "BOOKWORM_WINDOWS_BUILD=$build" >> $env:GITHUB_ENV
-          flutter build windows --release --build-name $version --build-number $build --dart-define-from-file=cloud-config.windows.ci.json
-
-      # 4. 自动识别新旧 Flutter 产物路径并打包为 zip
-      - name: Archive Windows Release
-        shell: pwsh
-        run: |
-          if (Test-Path "build\windows\x64\runner\Release") {
-            $releaseDir = "build\windows\x64\runner\Release"
-          } elseif (Test-Path "build\windows\runner\Release") {
-            $releaseDir = "build\windows\runner\Release"
-          } else {
-            Write-Error "未找到 Windows 编译输出目录！"
-            exit 1
-          }
-          Compress-Archive -Path "$releaseDir\*" -DestinationPath "BookWorm-$env:BOOKWORM_WINDOWS_VERSION-build$env:BOOKWORM_WINDOWS_BUILD-Windows-x64.zip" -Force
-
-      # 5. 上传为 Actions 临时产物（每次运行后在 Actions 页面底部下载）
-      - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
+          python scripts/ci/release_tools.py package windows
+          $asset = '${{ steps.meta.outputs.asset }}'
+          $hash = (Get-FileHash "dist/$asset" -Algorithm SHA256).Hash.ToLower()
+          [IO.File]::WriteAllText((Join-Path $PWD 'dist/SHA256SUMS-Windows.txt'), "$hash  $asset`n", [Text.UTF8Encoding]::new($false))
+      - uses: actions/upload-artifact@v4
         with:
-          name: BookWorm-Windows-x64
-          path: BookWorm-*-Windows-x64.zip
+          name: BookWorm-Windows-Release-${{ steps.meta.outputs.version }}-build${{ steps.meta.outputs.build }}
+          path: |
+            dist/*.zip
+            dist/SHA256SUMS-Windows.txt
+          if-no-files-found: error
           retention-days: 30
+      - name: Publish Windows download
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: BookWorm Windows ${{ steps.meta.outputs.version }} (${{ steps.meta.outputs.build }})
+          draft: false
+          fail_on_unmatched_files: true
+          files: |
+            dist/*.zip
+            dist/SHA256SUMS-Windows.txt
+          body: |
+            Windows x64 Release build generated by GitHub Actions. Includes the latest concurrent reading/transfers and corrected swipe direction.
+
+            Extract the entire ZIP to a writable folder and run bookworm.exe. Keep data and all DLLs beside it. Release Visual C++ runtime DLLs are included; this package does not require msvcp140d.dll or a Visual Studio debug runtime.
+
+            Unsigned portable app. CI checks native DLL dependencies and executable startup; reader and audio behavior still require user verification.
+
+            Build source: ${{ github.sha }}
+            Build log: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      - if: always()
+        name: Remove private build configuration
+        run: python scripts/ci/release_tools.py cleanup
