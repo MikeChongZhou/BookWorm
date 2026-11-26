@@ -4,12 +4,16 @@ import 'cloud_provider.dart';
 
 /// Apple's system account and the app's registered iCloud container, with no folder picker.
 /// Non-Apple clients use a separate account-based provider; iCloud Drive has no equivalent native API there.
-class NativeICloudProvider implements CloudProvider {
+class NativeICloudProvider implements CloudProvider, CloudTransferLimits {
   static const channel = MethodChannel('bookworm/icloud');
   final String container;
   const NativeICloudProvider(this.container);
   factory NativeICloudProvider.production() =>
       const NativeICloudProvider(String.fromEnvironment('ICLOUD_CONTAINER'));
+  @override
+  int get transferChunkBytes => 1024 * 1024;
+  @override
+  int get transferWorkers => 2;
   @override
   String get name => 'iCloud';
   @override

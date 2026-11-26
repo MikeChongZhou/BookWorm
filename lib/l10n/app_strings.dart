@@ -74,6 +74,14 @@ const dynamicTranslations = <String, List<String>>{
     "Descarga incompleta. Reintenta: {1}",
   ],
 
+  r"^上传本地文件中，已上传 (\d+) 个文件 · ([\d.]+/[\d.]+) MB · ([\d.]+) MB/s$": [
+    "Uploading · {1} files uploaded · {2} MB · {3} MB/s",
+    "Subiendo · {1} archivos · {2} MB · {3} MB/s",
+  ],
+  r"^下载本地文件中，已下载 (\d+) 个文件 · ([\d.]+/[\d.]+) MB · ([\d.]+) MB/s$": [
+    "Downloading · {1} files downloaded · {2} MB · {3} MB/s",
+    "Descargando · {1} archivos · {2} MB · {3} MB/s",
+  ],
   r"^上传本地文件中，已上传 (\d+) 个文件$": [
     "Uploading local files · {1} files uploaded",
     "Subiendo archivos locales · {1} archivos subidos",

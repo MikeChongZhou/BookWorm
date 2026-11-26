@@ -88,6 +88,18 @@ class OneDriveProvider implements CloudProvider {
 class GoogleDriveProvider implements CloudProvider {
   final OAuthSession session;
   final Map<String, String> _ids = {};
+  bool _listed = false;
+  Future<List<String>>? _listing;
+  Future<void> _ensureListed() async {
+    if (_listed) return;
+    final pending = _listing ??= list();
+    try {
+      await pending;
+    } finally {
+      if (identical(_listing, pending)) _listing = null;
+    }
+  }
+
   GoogleDriveProvider(this.session);
   factory GoogleDriveProvider.production() => GoogleDriveProvider(
     OAuthSession(
@@ -117,6 +129,7 @@ class GoogleDriveProvider implements CloudProvider {
   @override
   Future<void> disconnect() async {
     _ids.clear();
+    _listed = false;
     await session.disconnect();
   }
 
@@ -139,12 +152,13 @@ class GoogleDriveProvider implements CloudProvider {
       }
       page = j['nextPageToken'] as String?;
     } while (page != null);
+    _listed = true;
     return _ids.keys.toList();
   }
 
   @override
   Future<Uint8List> read(String key) async {
-    if (!_ids.containsKey(key)) await list();
+    await _ensureListed();
     final id = _ids[key];
     if (id == null) throw const CloudFailure('云文件不存在');
     final r = await session.request(
@@ -159,7 +173,7 @@ class GoogleDriveProvider implements CloudProvider {
 
   @override
   Future<void> write(String key, Uint8List bytes) async {
-    if (!_ids.containsKey(key)) await list();
+    await _ensureListed();
     final id = _ids[key];
     final url = Uri.https(
       'www.googleapis.com',

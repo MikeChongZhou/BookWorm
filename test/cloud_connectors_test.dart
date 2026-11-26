@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -26,6 +27,69 @@ class FakeSession extends OAuthSession {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'Google Drive lists once for concurrent new files, not before every upload',
+    () async {
+      var listings = 0, uploads = 0;
+      final client = MockClient((r) async {
+        if (r.method == 'GET') {
+          listings++;
+          return http.Response(jsonEncode({'files': []}), 200);
+        }
+        if (r.method == 'POST') {
+          return http.Response(
+            '',
+            200,
+            headers: {
+              'location':
+                  'https://www.googleapis.com/upload-session/${uploads++}',
+            },
+          );
+        }
+        return http.Response(
+          jsonEncode({'id': 'file-${r.url.pathSegments.last}'}),
+          200,
+        );
+      });
+      final drive = GoogleDriveProvider(FakeSession(client));
+      await Future.wait(
+        List.generate(4, (i) => drive.write('new-$i', Uint8List.fromList([i]))),
+      );
+      expect(listings, 1);
+      expect(uploads, 4);
+    },
+  );
+  test('concurrent OAuth requests share one refresh exchange', () async {
+    FlutterSecureStorage.setMockInitialValues({
+      'bookworm_test_refresh': 'refresh-token',
+    });
+    var exchanges = 0;
+    final session = OAuthSession(
+      provider: 'test',
+      clientId: 'id',
+      authorizationEndpoint: 'https://example.com/auth',
+      tokenEndpoint: 'https://example.com/token',
+      scope: 'test',
+      redirect: 'bookworm://oauth',
+      client: MockClient((r) async {
+        exchanges++;
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+        return http.Response(
+          jsonEncode({
+            'access_token': 'access',
+            'refresh_token': 'rotated',
+            'expires_in': 3600,
+          }),
+          200,
+        );
+      }),
+    );
+    expect(
+      await Future.wait(List.generate(4, (_) => session.token())),
+      List.filled(4, 'access'),
+    );
+    expect(exchanges, 1);
+  });
   test('CloudKit uses private database and rotates user token', () async {
     FlutterSecureStorage.setMockInitialValues({
       'bookworm_cloudkit_token': 'old-token',

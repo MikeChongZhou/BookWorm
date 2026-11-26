@@ -16,3 +16,9 @@ class CloudFailure implements Exception {
   @override
   String toString() => message;
 }
+
+/// Optional provider limits. Generic Drive providers use binary 4 MiB parts.
+abstract interface class CloudTransferLimits {
+  int get transferChunkBytes;
+  int get transferWorkers;
+}

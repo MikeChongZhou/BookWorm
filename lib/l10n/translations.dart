@@ -1,4 +1,5 @@
 const translations = <String, List<String>>{
+  "正在解析已下载书籍": ["Preparing downloaded book", "Preparando el libro descargado"],
   "管理书源": ["Manage book sources", "Gestionar fuentes"],
   "添加／管理书源": ["Add / manage sources", "Añadir / gestionar fuentes"],
   "输入单本或多本书籍汇集网站。支持 OPDS、静态网页中的 EPUB／PDF／TXT 下载链接和同站分页；每次最多扫描 30 页、1000 本。需要登录或 JavaScript 的网站需单独适配。":

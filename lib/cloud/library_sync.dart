@@ -65,33 +65,72 @@ class LibrarySync {
       if (!known.contains(key)) {
         status?.call('上传本地文件中，已上传 ${result.uploaded} 个文件');
         final source = await library.readSource(book.id);
-        final bytes = await compute(encodeCloudBook, (book, source));
-        final parts = <Map<String, dynamic>>[];
-        for (
-          var start = 0, index = 0;
-          start < bytes.length;
-          start += chunkSize, index++
-        ) {
-          final end = (start + chunkSize).clamp(0, bytes.length);
-          final part = Uint8List.fromList(bytes.sublist(start, end));
-          final partKey = 'book-${book.id}-$index.part';
-          // Re-upload incomplete chunks, never trust a name without a committed hash.
-          await cloud.write(partKey, part);
-          if (yieldRequested?.call() == true) {
-            result.deferred = true;
-            return result;
-          }
-          parts.add({
-            'key': partKey,
-            'hash': sha256.convert(part).toString(),
-            'size': part.length,
-          });
+        if (source.isEmpty ||
+            source.length > BookImporter.maxBytes ||
+            await compute(sourceHash, source) != book.id) {
+          throw const CloudFailure('书籍原件校验失败');
         }
-        await cloud.write(
-          key,
-          Uint8List.fromList(
-            utf8.encode(
-              jsonEncode({'schema': 1, 'id': book.id, 'parts': parts}),
+        final limits = cloud is CloudTransferLimits
+            ? cloud as CloudTransferLimits
+            : null;
+        final size = (limits?.transferChunkBytes ?? 4 * 1024 * 1024).clamp(
+          192 * 1024,
+          4 * 1024 * 1024,
+        );
+        final workers = (limits?.transferWorkers ?? 4).clamp(1, 4);
+        final parts = await compute(sourceParts, (source, size));
+        final meter = _TransferMeter(
+          '上传',
+          result.uploaded,
+          source.length,
+          status,
+        );
+        final groups = _partGroups(parts);
+        await _parallel(groups.length, workers, (job) async {
+          final indices = groups[job];
+          final index = indices.first;
+          if (yieldRequested?.call() == true) return;
+          final part = parts[index];
+          final partKey = part['key'] as String;
+          final start = index * size;
+          final bytes = Uint8List.sublistView(
+            source,
+            start,
+            (start + size).clamp(0, source.length),
+          );
+          // Content-addressed objects are immutable. A listed object survives a
+          // failed attempt and can safely be reused without uploading it again.
+          if (!known.contains(partKey)) {
+            await _retry(() => cloud.write(partKey, bytes));
+            known.add(partKey);
+            meter.add(bytes.length);
+          } else {
+            meter.reuse(bytes.length);
+          }
+          if (indices.length > 1) {
+            meter.reuse(bytes.length * (indices.length - 1));
+          }
+        });
+        if (yieldRequested?.call() == true) {
+          result.deferred = true;
+          return result;
+        }
+        // Publishing this small manifest is the commit. Partial books stay hidden.
+        await _retry(
+          () => cloud.write(
+            key,
+            Uint8List.fromList(
+              utf8.encode(
+                jsonEncode({
+                  'schema': 2,
+                  'id': book.id,
+                  'format': book.format,
+                  'title': book.title,
+                  'author': book.author,
+                  'size': source.length,
+                  'parts': parts,
+                }),
+              ),
             ),
           ),
         );
@@ -121,58 +160,35 @@ class LibrarySync {
         result.deferred = true;
         return result;
       }
+      // A local book already has immutable content; do not fetch its manifest.
+      final listedId = key.substring(5, key.length - '.manifest'.length);
+      if (localIds.contains(listedId)) continue;
       final manifest = Map<String, dynamic>.from(
-        jsonDecode(utf8.decode(await cloud.read(key))),
+        jsonDecode(utf8.decode(await _retry(() => cloud.read(key)))),
       );
       final id = manifest['id'] as String;
       if (!RegExp(r'^[a-f0-9]{64}$').hasMatch(id) ||
           key != 'book-$id.manifest') {
         throw const CloudFailure('云书籍标识不匹配');
       }
-      if (localIds.contains(id)) continue;
       status?.call('下载本地文件中，已下载 ${result.downloaded} 个文件');
-      final parts = manifest['parts'] as List;
-      if (parts.length > 1000) throw const CloudFailure('云文件块数过多');
-      await library.root.create(recursive: true);
-      final staging = await library.root.createTemp('.cloud-download-');
-      final partial = File('${staging.path}/book.part');
-      final output = await partial.open(mode: FileMode.write);
-      try {
-        var total = 0;
-        for (var index = 0; index < parts.length; index++) {
-          final part = parts[index];
-          if (part['key'] != 'book-$id-$index.part') {
-            throw const CloudFailure('云内容路径不匹配');
-          }
-          final bytes = await cloud.read(part['key']);
-          if (yieldRequested?.call() == true) {
-            result.deferred = true;
-            return result;
-          }
-          total += bytes.length;
-          if (total > 100 * 1024 * 1024 ||
-              bytes.length != part['size'] ||
-              sha256.convert(bytes).toString() != part['hash']) {
-            throw const CloudFailure('私人云文件校验失败，本机内容未覆盖');
-          }
-          await output.writeFrom(bytes);
-        }
-        await output.flush();
-        final (book, source) = await compute(
-          decodeCloudBook,
-          await partial.readAsBytes(),
-        );
-        if (book.id != id || sha256.convert(source).toString() != id) {
-          throw const CloudFailure('书籍原件校验失败');
-        }
-        await library.install(book, source);
-        localIds.add(id);
-        result.downloaded++;
-        status?.call('下载本地文件中，已下载 ${result.downloaded} 个文件');
-      } finally {
-        await output.close();
-        await staging.delete(recursive: true);
+      final downloaded = await _download(
+        cloud,
+        manifest,
+        result.downloaded,
+        status,
+        yieldRequested,
+      );
+      if (downloaded == null) {
+        result.deferred = true;
+        return result;
       }
+      final (book, source, staging) = downloaded;
+      await library.install(book, source);
+      await staging.delete(recursive: true);
+      localIds.add(id);
+      result.downloaded++;
+      status?.call('下载本地文件中，已下载 ${result.downloaded} 个文件');
     }
     local = await library.load();
     status?.call('正在同步阅读进度');
@@ -238,6 +254,128 @@ class LibrarySync {
     }
     return result;
   }
+
+  Future<(LocalBook, Uint8List, Directory)?> _download(
+    CloudProvider cloud,
+    Map<String, dynamic> manifest,
+    int completed,
+    void Function(String)? status,
+    bool Function()? yieldRequested,
+  ) async {
+    final id = manifest['id'] as String;
+    final schema = manifest['schema'] as int? ?? 1;
+    if (schema != 1 && schema != 2) throw const CloudFailure('请更新书虫后同步此书');
+    final parts = (manifest['parts'] as List)
+        .map((p) => Map<String, dynamic>.from(p))
+        .toList();
+    if (parts.isEmpty || parts.length > 1000) {
+      throw const CloudFailure('云文件块数无效');
+    }
+    var total = 0;
+    for (var i = 0; i < parts.length; i++) {
+      final p = parts[i];
+      final hash = p['hash'];
+      final size = p['size'];
+      if (hash is! String ||
+          !RegExp(r'^[a-f0-9]{64}$').hasMatch(hash) ||
+          size is! int ||
+          size <= 0 ||
+          size > 4 * 1024 * 1024 ||
+          p['key'] !=
+              (schema == 1
+                  ? 'book-$id-$i.part'
+                  : 'book-$hash-2000000000.part')) {
+        throw const CloudFailure('云内容路径或大小不匹配');
+      }
+      total += size;
+    }
+    if (total > (schema == 2 ? BookImporter.maxBytes : 100 * 1024 * 1024) ||
+        (schema == 2 && manifest['size'] != total)) {
+      throw const CloudFailure('云书籍大小无效');
+    }
+    await library.root.create(recursive: true);
+    final staging = Directory('${library.root.path}/.cloud-download-$id');
+    await staging.create(recursive: true);
+    final limits = cloud is CloudTransferLimits
+        ? cloud as CloudTransferLimits
+        : null;
+    final meter = _TransferMeter('下载', completed, total, status);
+    final groups = _partGroups(parts);
+    await _parallel(groups.length, (limits?.transferWorkers ?? 4).clamp(1, 4), (
+      job,
+    ) async {
+      final indices = groups[job];
+      final i = indices.first;
+      if (yieldRequested?.call() == true) return;
+      final p = parts[i];
+      final cached = File('${staging.path}/${p['hash']}.part');
+      if (await cached.exists()) {
+        final bytes = await cached.readAsBytes();
+        if (bytes.length == p['size'] &&
+            await compute(sourceHash, bytes) == p['hash']) {
+          meter.reuse(bytes.length * indices.length);
+          return;
+        }
+        await cached.delete();
+      }
+      final bytes = await _retry(() async {
+        final value = await cloud.read(p['key'] as String);
+        if (value.length != p['size'] ||
+            await compute(sourceHash, value) != p['hash']) {
+          throw const CloudFailure('私人云文件校验失败，本机内容未覆盖');
+        }
+        return value;
+      });
+      // Temporary files are never book entries. Keep verified parts for retries.
+      final partial = File('${cached.path}.$i.tmp');
+      await partial.writeAsBytes(bytes, flush: true);
+      if (await cached.exists()) await cached.delete();
+      await partial.rename(cached.path);
+      meter.add(bytes.length);
+      if (indices.length > 1) meter.reuse(bytes.length * (indices.length - 1));
+    });
+    if (yieldRequested?.call() == true) return null;
+    final joined = File('${staging.path}/source.tmp');
+    final output = await joined.open(mode: FileMode.write);
+    try {
+      for (final p in parts) {
+        await output.writeFrom(
+          await File('${staging.path}/${p['hash']}.part').readAsBytes(),
+        );
+      }
+      await output.flush();
+    } finally {
+      await output.close();
+    }
+    final bytes = await joined.readAsBytes();
+    late LocalBook book;
+    late Uint8List source;
+    if (schema == 1) {
+      (book, source) = await compute(decodeCloudBook, bytes);
+    } else {
+      source = bytes;
+      if (!['txt', 'epub', 'pdf'].contains(manifest['format'])) {
+        throw const CloudFailure('云书籍格式无效');
+      }
+      if (await compute(sourceHash, source) != id) {
+        throw const CloudFailure('书籍原件校验失败');
+      }
+      status?.call('正在解析已下载书籍');
+      final parsed = await BookImporter().parse(
+        'book.${manifest['format']}',
+        source,
+      );
+      book = LocalBook.fromJson(
+        parsed.toJson()
+          ..['title'] = manifest['title'] as String
+          ..['author'] = manifest['author'] as String,
+      );
+    }
+    if (book.id != id || await compute(sourceHash, source) != id) {
+      throw const CloudFailure('书籍原件校验失败');
+    }
+    return (book, source, staging);
+  }
 }
 
 Uint8List encodeCloudBook((LocalBook, Uint8List) input) {
@@ -262,4 +400,93 @@ Uint8List encodeCloudBook((LocalBook, Uint8List) input) {
     if (corrected.id == book.id) book = restoreBookPosition(book, corrected);
   }
   return (book, source);
+}
+
+String sourceHash(Uint8List bytes) => sha256.convert(bytes).toString();
+List<Map<String, dynamic>> sourceParts((Uint8List, int) input) {
+  final (bytes, size) = input;
+  return [
+    for (var i = 0; i < bytes.length; i += size)
+      (() {
+        final part = Uint8List.sublistView(
+          bytes,
+          i,
+          (i + size).clamp(0, bytes.length),
+        );
+        final hash = sourceHash(part);
+        return <String, dynamic>{
+          'key': 'book-$hash-2000000000.part',
+          'hash': hash,
+          'size': part.length,
+        };
+      })(),
+  ];
+}
+
+Future<T> _retry<T>(Future<T> Function() action) async {
+  for (var attempt = 0; ; attempt++) {
+    try {
+      return await action();
+    } catch (_) {
+      if (attempt == 2) rethrow;
+      await Future<void>.delayed(Duration(milliseconds: 500 * (1 << attempt)));
+    }
+  }
+}
+
+Future<void> _parallel(
+  int count,
+  int workers,
+  Future<void> Function(int) action,
+) async {
+  var index = 0;
+  var failed = false;
+  await Future.wait(
+    List.generate(workers.clamp(1, count), (_) async {
+      while (!failed && index < count) {
+        final current = index++;
+        try {
+          await action(current);
+        } catch (_) {
+          failed = true;
+          rethrow;
+        }
+      }
+    }),
+  );
+}
+
+class _TransferMeter {
+  final String direction;
+  final int completed, total;
+  final void Function(String)? status;
+  final watch = Stopwatch()..start();
+  int transferred = 0, done = 0, lastUpdate = -1000;
+  _TransferMeter(this.direction, this.completed, this.total, this.status);
+  void add(int bytes) {
+    transferred += bytes;
+    reuse(bytes);
+  }
+
+  void reuse(int bytes) {
+    done += bytes;
+    if (watch.elapsedMilliseconds - lastUpdate < 250 && done < total) return;
+    lastUpdate = watch.elapsedMilliseconds;
+    final rate =
+        transferred /
+        (watch.elapsedMilliseconds.clamp(1, 1 << 40) / 1000) /
+        1048576;
+    status?.call(
+      '$direction本地文件中，已$direction $completed 个文件 · '
+      '${(done / 1048576).toStringAsFixed(1)}/${(total / 1048576).toStringAsFixed(1)} MB · ${rate.toStringAsFixed(2)} MB/s',
+    );
+  }
+}
+
+List<List<int>> _partGroups(List<Map<String, dynamic>> parts) {
+  final groups = <String, List<int>>{};
+  for (var i = 0; i < parts.length; i++) {
+    (groups[parts[i]['hash'] as String] ??= []).add(i);
+  }
+  return groups.values.toList();
 }

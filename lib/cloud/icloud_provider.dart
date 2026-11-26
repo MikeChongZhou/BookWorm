@@ -10,7 +10,7 @@ import 'package:http/http.dart' as http;
 import 'cloud_provider.dart';
 
 /// Uses only the signed-in user's CloudKit PRIVATE database. Never a platform relay.
-class ICloudProvider implements CloudProvider {
+class ICloudProvider implements CloudProvider, CloudTransferLimits {
   final String container, apiToken, environment, redirect;
   final http.Client client;
   final FlutterSecureStorage storage;
@@ -40,6 +40,10 @@ class ICloudProvider implements CloudProvider {
       defaultValue: 'production',
     ),
   );
+  @override
+  int get transferChunkBytes => 192 * 1024;
+  @override
+  int get transferWorkers => 3;
   @override
   String get name => 'iCloud';
   @override

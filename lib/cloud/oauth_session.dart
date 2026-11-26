@@ -22,6 +22,7 @@ class OAuthSession {
   String? _access;
   DateTime _expires = DateTime(2000);
   bool _googleInitialized = false;
+  Future<String>? _tokenRequest;
   OAuthSession({
     required this.provider,
     required this.clientId,
@@ -41,9 +42,21 @@ class OAuthSession {
       base64UrlEncode(List.generate(32, (_) => Random.secure().nextInt(256)))
           .replaceAll('=', '');
   Future<String> token({bool interactive = false}) async {
+    if (_access != null && DateTime.now().isBefore(_expires)) return _access!;
+    final pending = _tokenRequest ??= _obtainToken(interactive: interactive);
+    try {
+      return await pending;
+    } finally {
+      if (identical(_tokenRequest, pending)) _tokenRequest = null;
+    }
+  }
+
+  Future<String> _obtainToken({bool interactive = false}) async {
     if (provider == 'google' &&
         (Platform.isAndroid || Platform.isIOS || Platform.isMacOS)) {
-      return _nativeGoogle(interactive);
+      _access = await _nativeGoogle(interactive);
+      _expires = DateTime.now().add(const Duration(minutes: 5));
+      return _access!;
     }
     if (_access != null && DateTime.now().isBefore(_expires)) return _access!;
     final refresh = await storage.read(key: 'bookworm_${provider}_refresh');
