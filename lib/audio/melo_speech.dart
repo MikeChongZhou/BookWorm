@@ -244,6 +244,7 @@ void meloWorker(List<dynamic> args) {
 
 class SelectedSpeech
     implements
+        SpeechLanguage,
         SpeechEngine,
         SpeechResources,
         NextSpeech,
@@ -292,6 +293,17 @@ class SelectedSpeech
     final engine = _engine;
     if (engine is SpeechTiming) {
       (engine as SpeechTiming).startPosition(position);
+    }
+  }
+
+  @override
+  Future<void> language(String code) async {
+    await prepare();
+    final engine = _engine;
+    if (engine is SpeechLanguage) {
+      await (engine as SpeechLanguage).language(code);
+    } else if (!['zh', 'en'].contains(code.split('-').first)) {
+      throw StateError('Melo 仅支持中文与英文；请在设置中选择系统语音以播放其他语言');
     }
   }
 

@@ -131,6 +131,17 @@ class SystemFileSpeech extends DeviceSpeech
   }
 
   @override
+  Future<void> language(String code) async {
+    await _queue;
+    await super.language(code);
+    final locale = code.split('-').first;
+    _voice = preferredVoice?['locale']?.split('-').first == locale
+        ? preferredVoice
+        : {'locale': code};
+    _cache.clear();
+  }
+
+  @override
   Future<void> close() async {
     _closed = true;
     await stop();

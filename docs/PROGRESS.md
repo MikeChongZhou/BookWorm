@@ -163,3 +163,9 @@ Google Drive 新对象写入不再逐个重复全目录查询；同一会话并�
 ### 同步优化源码上传与 Windows 分发准备
 
 用户要求生成新 Windows exe，准备通过 GitHub Actions 发布 Windows 1.0.11（13），使用既有 Release CRT 打包与原生启动检查。共享实现发生变更，因此 Android／macOS／iOS 源码版本升级为 1.0.9，但本次不构建这三端，不变更其构建号；既有 TestFlight 仍为 1.0.8（11）。实际 Windows 构建和发布结果另存 dist 回执。
+
+## 2026-11-26 翻译阅读源码上传
+
+新增四端共用逐段翻译听读：原文、译文、可选模型背景介绍、原文复读。目标语言默认跟随系统；支持本地 Ollama、在线兼容接口和 OpenRouter／OpenAI／Gemini 预设，OpenRouter PKCE 登录授权、其他两家官方 API 密钥绑定入口。密钥按服务地址隔离保存；背景开关在设置与播放页联动；高亮原文及翻译播放文字支持点击暂停／再次点击继续。详见 translation-reading.md。
+
+本批共享源码产品版本滚动一次：iOS／Android／macOS 1.0.10，Windows 1.0.12。仅上传源码，不构建分发包，构建号保持原值；现有 TestFlight 和 GitHub 安装包不包含本批功能。9 项翻译／播放状态机／PKCE 单元检查通过。不调用真实在线模型，不运行模拟器／界面模拟测试；真实账号回调与四端真机效果仍待验收。

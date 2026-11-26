@@ -1,22 +1,22 @@
 {
   "release_tag": "apps-build11",
   "android": {
-    "version": "1.0.9",
+    "version": "1.0.10",
     "build": 11,
     "signing": "existing local test key"
   },
   "macos": {
-    "version": "1.0.9",
+    "version": "1.0.10",
     "build": 11,
     "signing": "Developer ID"
   },
   "windows": {
-    "version": "1.0.11",
+    "version": "1.0.12",
     "build": 13,
     "signing": "unsigned"
   },
   "ios": {
-    "version": "1.0.9",
+    "version": "1.0.10",
     "build": 11,
     "distribution": "Source updated; previous TestFlight package remains 1.0.8 (11)"
   }

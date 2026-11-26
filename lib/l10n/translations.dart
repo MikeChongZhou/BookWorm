@@ -1,4 +1,96 @@
 const translations = <String, List<String>>{
+  "OpenAI（ChatGPT 系列）": ["OpenAI (ChatGPT models)", "OpenAI (modelos ChatGPT)"],
+  "自定义兼容服务": ["Custom compatible service", "Servicio compatible personalizado"],
+  "翻译模型": ["Translation model", "Modelo de traduccion"],
+  "地址和默认模型已自动填写；在线调用使用服务商的 API 额度，可能产生费用。": [
+    "Address and default model are filled automatically. API charges may apply.",
+    "La direccion y el modelo se completan automaticamente. La API puede tener coste.",
+  ],
+  "已安全保存授权": ["Authorization securely saved", "Autorizacion guardada"],
+  "尚未绑定授权": ["Authorization not connected", "Autorizacion sin conectar"],
+  "正在等待登录授权": ["Waiting for sign-in authorization", "Esperando autorizacion"],
+  "登录 OpenRouter 并授权": [
+    "Sign in and authorize OpenRouter",
+    "Iniciar sesion y autorizar OpenRouter",
+  ],
+  "网页账号登录不等于 API 授权；请登录官方页面获取 API 密钥，首次绑定一次即可。": [
+    "Website sign-in does not grant API access. Get an API key on the official page and connect it once.",
+    "Iniciar sesion en la web no autoriza la API. Obtiene una clave oficial y vincula una vez.",
+  ],
+  "登录官方页面并获取密钥": [
+    "Sign in on official key page",
+    "Abrir pagina oficial de claves",
+  ],
+  "移除本机授权": [
+    "Remove authorization on this device",
+    "Eliminar autorizacion local",
+  ],
+  "登录未完成，请重试或手动绑定 API 密钥": [
+    "Sign-in incomplete. Retry or enter an API key manually.",
+    "Inicio de sesion incompleto. Reintenta o introduce una clave API.",
+  ],
+  "无法打开服务页面": [
+    "Cannot open service page",
+    "No se puede abrir la pagina del servicio",
+  ],
+  "翻译阅读": ["Translation reading", "Lectura con traducción"],
+  "开启翻译阅读": ["Enable translation reading", "Activar lectura con traducción"],
+  "翻译方式": ["Translation provider", "Servicio de traducción"],
+  "本地模型（Ollama）": ["Local model (Ollama)", "Modelo local (Ollama)"],
+  "在线服务": ["Online service", "Servicio en línea"],
+  "本地翻译服务": ["Local translation service", "Servicio de traducción local"],
+  "在线翻译服务": ["Online translation service", "Servicio de traducción en línea"],
+  "目标语言": ["Target language", "Idioma de destino"],
+  "加入背景介绍": ["Include background context", "Incluir contexto"],
+  "背景介绍": ["Background context", "Contexto"],
+  "译文": ["Translation", "Traducción"],
+  "原文复读": ["Original again", "Repetir original"],
+  "正在生成译文": ["Generating translation", "Generando traducción"],
+  "正在生成背景介绍": ["Generating background context", "Generando contexto"],
+  "配置翻译服务": [
+    "Configure translation service",
+    "Configurar servicio de traducción",
+  ],
+  "模型名称": ["Model name", "Nombre del modelo"],
+  "Ollama 地址": ["Ollama address", "Dirección de Ollama"],
+  "API 基础地址（例如 https://服务地址/v1）": [
+    "API base URL (for example https://service/v1)",
+    "URL base de API (por ejemplo https://servicio/v1)",
+  ],
+  "API 密钥（留空保留已有密钥）": [
+    "API key (leave blank to keep the existing key)",
+    "Clave API (en blanco conserva la clave actual)",
+  ],
+  "每段依次播放：原文 → 译文 → 可选背景介绍 → 原文复读。": [
+    "Each paragraph: original → translation → optional context → original again.",
+    "Cada párrafo: original → traducción → contexto opcional → original de nuevo.",
+  ],
+  "原文 → 译文 → 可选背景介绍 → 原文复读": [
+    "Original → translation → optional context → original again",
+    "Original → traducción → contexto opcional → original de nuevo",
+  ],
+  "与播放页面共用此开关；模型生成的背景介绍仅供辅助理解。": [
+    "Shared with the player. Model-generated context is a reading aid.",
+    "Compartido con el reproductor. El contexto generado sirve de ayuda.",
+  ],
+  "进度按原文段落记录；背景介绍由模型生成，仅供参考。": [
+    "Progress follows original paragraphs. Generated context is for reference.",
+    "El progreso sigue los párrafos originales. El contexto generado es orientativo.",
+  ],
+  "朗读使用当前语音引擎；Melo 仅支持中文和英文，其他语言请选择系统语音并安装对应音色。": [
+    "Uses the selected speech engine. Melo supports Chinese and English; for other languages, select system speech and install a matching voice.",
+    "Usa el motor de voz elegido. Melo admite chino e inglés; para otros idiomas, elige la voz del sistema e instala una voz compatible.",
+  ],
+  "连接本机或局域网 Ollama。手机上的 localhost 指手机本身。Android 局域网请使用电脑的 .local 主机名或 HTTPS 地址。不会自动下载模型。":
+      [
+        "Connect to Ollama on this device or LAN. On a phone, localhost means the phone itself. For Android LAN access, use the computer’s .local hostname or HTTPS. Models are not downloaded automatically.",
+        "Conecta con Ollama en este dispositivo o la red local. En un teléfono, localhost es el propio teléfono. En Android usa el nombre .local del ordenador o HTTPS. Los modelos no se descargan automáticamente.",
+      ],
+  "支持 OpenAI 兼容的 Chat Completions 服务。启用在线翻译后，当前段落、书名和章节会发送到此服务；可能产生服务费用。": [
+    "Supports OpenAI-compatible Chat Completions services. Online translation sends the current paragraph, book title and chapter to your chosen service; service charges may apply.",
+    "Admite servicios Chat Completions compatibles con OpenAI. La traducción en línea envía el párrafo, título y capítulo al servicio elegido; puede tener coste.",
+  ],
+
   "正在解析已下载书籍": ["Preparing downloaded book", "Preparando el libro descargado"],
   "管理书源": ["Manage book sources", "Gestionar fuentes"],
   "添加／管理书源": ["Add / manage sources", "Añadir / gestionar fuentes"],

@@ -129,6 +129,23 @@ class _ReaderScreenState extends State<ReaderScreen>
     });
   }
 
+  bool textPlaybackPending = false;
+  Future<void> toggleTextPlayback() async {
+    if (textPlaybackPending || closing) return;
+    textPlaybackPending = true;
+    try {
+      if (player.playing || player.buffering) {
+        followAudio = false;
+        await player.pause();
+      } else {
+        followAudio = true;
+        unawaited(player.play());
+      }
+    } finally {
+      textPlaybackPending = false;
+    }
+  }
+
   void changed() {
     if (!mounted) return;
     if (player.playing) highlight = true;
@@ -745,6 +762,63 @@ class _ReaderScreenState extends State<ReaderScreen>
                 ),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: [
+                  FilterChip(
+                    label: Text(context.tr('翻译阅读')),
+                    selected: player.translationMode,
+                    onSelected: (value) async {
+                      try {
+                        final resume = player.playing || player.buffering;
+                        await player.pause();
+                        player.resetTranslation();
+                        await player.translationSettings.update(enabled: value);
+                        if (resume) unawaited(player.play());
+                      } catch (e) {
+                        if (mounted) message('设置失败：$e');
+                      }
+                    },
+                  ),
+                  FilterChip(
+                    label: Text(context.tr('背景介绍')),
+                    selected: player.translationSettings.includeBackground,
+                    onSelected: (_) async {
+                      try {
+                        await player.translationSettings.toggleBackground();
+                      } catch (e) {
+                        if (mounted) message('设置失败：$e');
+                      }
+                    },
+                  ),
+                ],
+              ),
+              if (player.translationMode) ...[
+                const SizedBox(height: 8),
+                Text(
+                  context.tr(
+                    player.lessonStatus.isEmpty
+                        ? '原文 → 译文 → 可选背景介绍 → 原文复读'
+                        : player.lessonStatus,
+                  ),
+                ),
+                Text(
+                  context.tr('进度按原文段落记录；背景介绍由模型生成，仅供参考。'),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                if (player.lessonText.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: SelectableText(
+                      player.lessonText,
+                      maxLines: 8,
+                      onTap: toggleTextPlayback,
+                    ),
+                  ),
+              ],
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -1020,8 +1094,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                             onText &&
                             offset >= sentence.start &&
                             offset < sentence.end) {
-                          followAudio = false;
-                          await player.pause();
+                          await toggleTextPlayback();
                         } else {
                           setState(() => toolbar = !toolbar);
                         }
