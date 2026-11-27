@@ -9,6 +9,8 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 
 import 'cloud_provider.dart';
+import 'cloud_error.dart';
+import '../diagnostics/app_log.dart';
 
 class OAuthSession {
   final String provider,
@@ -127,9 +129,44 @@ class OAuthSession {
       );
       _googleInitialized = true;
     }
+    try {
+      return await _googleAuthorization(interactive);
+    } catch (error) {
+      if (!requiresCloudSignIn(error)) rethrow;
+      _access = null;
+      _expires = DateTime(2000);
+      AppLog.instance.record(
+        'sync',
+        'authorization_required',
+        fields: {
+          'provider': 'google',
+          'errorType': error.runtimeType.toString(),
+        },
+      );
+      if (!interactive) throw const CloudAuthorizationFailure();
+      // Only an explicit reconnect may open login UI and discard stale local
+      // Google SDK login state. Never revoke remote grants or delete cloud files.
+      await GoogleSignIn.instance.signOut();
+      try {
+        return await _googleAuthorization(true, fresh: true);
+      } catch (retryError) {
+        if (requiresCloudSignIn(retryError)) {
+          throw const CloudAuthorizationFailure();
+        }
+        rethrow;
+      }
+    }
+  }
+
+  Future<String> _googleAuthorization(
+    bool interactive, {
+    bool fresh = false,
+  }) async {
     GoogleSignInAccount? account;
-    final attempt = GoogleSignIn.instance.attemptLightweightAuthentication();
-    if (attempt != null) account = await attempt;
+    if (!fresh) {
+      final attempt = GoogleSignIn.instance.attemptLightweightAuthentication();
+      if (attempt != null) account = await attempt;
+    }
     if (account == null && interactive) {
       account = await GoogleSignIn.instance.authenticate();
     }

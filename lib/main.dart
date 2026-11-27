@@ -1,5 +1,10 @@
 import 'dart:io';
 
+import 'package:package_info_plus/package_info_plus.dart';
+
+import 'diagnostics/app_log.dart';
+import 'cloud/cloud_error.dart';
+
 import 'cloud/native_icloud_provider.dart';
 
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -34,6 +39,32 @@ import 'history/reading_history.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FlutterError.onError = (details) {
+    AppLog.instance.record(
+      'app',
+      'flutter_error',
+      fields: {'errorType': details.exception.runtimeType.toString()},
+    );
+    FlutterError.presentError(details);
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    AppLog.instance.record(
+      'app',
+      'unhandled_error',
+      fields: {'errorType': error.runtimeType.toString()},
+    );
+    return false;
+  };
+  final info = await PackageInfo.fromPlatform();
+  AppLog.instance.record(
+    'app',
+    'start',
+    fields: {
+      'platform': Platform.operatingSystem,
+      'version': info.version,
+      'build': info.buildNumber,
+    },
+  );
   await BookAudioHandler.initialize();
   LicenseRegistry.addLicense(() async* {
     yield LicenseEntryWithLineBreaks([
@@ -517,6 +548,12 @@ class _LibraryScreenState extends State<LibraryScreen>
   Future<void> sync({bool automatic = false}) async {
     final cloud = active;
     if (cloud == null || busy || syncing || store == null) return;
+    final syncClock = Stopwatch()..start();
+    AppLog.instance.record(
+      'sync',
+      'start',
+      fields: {'provider': cloud.name, 'automatic': automatic},
+    );
     update(() {
       syncing = true;
       status = t('连接 ${cloud.name}');
@@ -527,6 +564,16 @@ class _LibraryScreenState extends State<LibraryScreen>
         liveBook: liveBook,
         status: (s) {
           if (mounted) update(() => status = t(s));
+        },
+      );
+      AppLog.instance.record(
+        'sync',
+        'completed',
+        fields: {
+          'provider': cloud.name,
+          'uploaded': result.uploaded,
+          'downloaded': result.downloaded,
+          'elapsedMs': syncClock.elapsedMilliseconds,
         },
       );
       deferredCloudSync = result.deferred;
@@ -569,7 +616,23 @@ class _LibraryScreenState extends State<LibraryScreen>
         );
       }
     } catch (e) {
-      if (mounted) update(() => status = t('同步未完成：$e；本机书籍已保留'));
+      AppLog.instance.record(
+        'sync',
+        'failed',
+        fields: {
+          'provider': cloud.name,
+          'reason': cloudFailureReason(e),
+          'errorType': e.runtimeType.toString(),
+          'elapsedMs': syncClock.elapsedMilliseconds,
+        },
+      );
+      if (mounted) {
+        update(
+          () => status = requiresCloudSignIn(e)
+              ? t('私人云授权已失效，请在设置中的私人云重新授权；本机书籍已保留')
+              : t('同步未完成，请稍后重试或导出日志；本机书籍已保留'),
+        );
+      }
     } finally {
       if (mounted) {
         update(() {
@@ -594,7 +657,22 @@ class _LibraryScreenState extends State<LibraryScreen>
       active = cloud;
       await prefs!.setString('bookworm_cloud', cloud.name);
     } catch (e) {
-      toast(t('连接未完成：$e'));
+      AppLog.instance.record(
+        'sync',
+        'connect_failed',
+        fields: {
+          'provider': cloud.name,
+          'reason': cloudFailureReason(e),
+          'errorType': e.runtimeType.toString(),
+        },
+      );
+      toast(
+        t(
+          requiresCloudSignIn(e)
+              ? '私人云授权已失效，请在设置中的私人云重新授权；本机书籍已保留'
+              : '连接未完成，请重试或导出日志',
+        ),
+      );
     } finally {
       if (mounted) {
         update(() {

@@ -1,4 +1,32 @@
 const translations = <String, List<String>>{
+  "诊断日志": ["Diagnostic logs", "Registros de diagnóstico"],
+  "导出日志": ["Export logs", "Exportar registros"],
+  "正在导出日志": ["Exporting logs", "Exportando registros"],
+  "日志已导出": ["Logs exported", "Registros exportados"],
+  "日志导出失败，请检查存储空间或保存位置后重试": [
+    "Log export failed. Check storage or choose another location.",
+    "Error al exportar. Comprueba el almacenamiento o elige otra ubicación.",
+  ],
+  "无法访问日志目录": [
+    "Cannot access log folder",
+    "No se puede acceder a la carpeta de registros",
+  ],
+  "仅保存在本机，最多约 4 MB；不记录密钥、登录令牌、书籍正文或译文，不自动上传。": [
+    "Stored only on this device, up to about 4 MB. No keys, login tokens, book text or translations are recorded. No automatic upload.",
+    "Solo en este dispositivo, hasta unos 4 MB. No incluye claves, tokens, textos ni traducciones. Sin subida automática.",
+  ],
+  "私人云授权已失效，请在设置中的私人云重新授权；本机书籍已保留": [
+    "Cloud authorization expired. Reauthorize Private cloud in Settings. Local books are preserved.",
+    "La autorización ha caducado. Vuelve a autorizar la nube privada en Ajustes. Los libros locales se conservan.",
+  ],
+  "同步未完成，请稍后重试或导出日志；本机书籍已保留": [
+    "Sync incomplete. Retry later or export logs. Local books are preserved.",
+    "Sincronización incompleta. Reintenta o exporta registros. Los libros locales se conservan.",
+  ],
+  "连接未完成，请重试或导出日志": [
+    "Connection incomplete. Retry or export logs.",
+    "Conexión incompleta. Reintenta o exporta registros.",
+  ],
   "OpenAI（ChatGPT 系列）": ["OpenAI (ChatGPT models)", "OpenAI (modelos ChatGPT)"],
   "自定义兼容服务": ["Custom compatible service", "Servicio compatible personalizado"],
   "翻译模型": ["Translation model", "Modelo de traduccion"],

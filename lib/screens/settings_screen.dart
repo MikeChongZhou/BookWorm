@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_strings.dart';
 import 'translation_settings_card.dart';
+import 'diagnostics_card.dart';
 import '../settings/language_settings.dart';
 import '../audio/melo_model.dart';
 import '../audio/book_audio_handler.dart';
@@ -91,6 +92,7 @@ class SettingsPanel extends StatelessWidget {
         ),
         const TranslationSettingsCard(),
         const SpeechSettingsCard(),
+        const DiagnosticsCard(),
       ],
     );
   }

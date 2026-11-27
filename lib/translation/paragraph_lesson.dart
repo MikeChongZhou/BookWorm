@@ -19,3 +19,7 @@ abstract interface class ParagraphTranslator {
     required bool includeBackground,
   });
 }
+
+abstract interface class TranslationCancellation {
+  void cancelPending();
+}

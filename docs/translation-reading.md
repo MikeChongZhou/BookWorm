@@ -1,4 +1,4 @@
-# 翻译阅读（源码功能，安装包待发布）
+# 翻译阅读
 
 在设置中开启“翻译阅读”，选择本地或在线服务，并配置目标语言。在线提供预设地址和模型选择，本地填写已安装的模型名。目标语言默认跟随当前系统语言，与应用界面语言分开；也可指定中文、英文、西班牙语、日语、法语或德语。
 
@@ -30,3 +30,10 @@ OpenAI／Gemini 提供官方密钥页面入口；网页账号登录本身不等�
 原文页点击当前高亮句：播放中暂停，再次点击继续；点击其他区域仍控制工具栏。翻译播放页点击当前展示的播放文字也会暂停／继续。点击联动完成代码检查，未运行界面模拟测试。
 
 参考：[OpenRouter PKCE](https://openrouter.ai/docs/guides/overview/auth/oauth)、[OpenRouter 模型目录](https://openrouter.ai/api/v1/models)、[Gemini API 密钥](https://aistudio.google.com/docs/api-key)、[Gemini OpenAI 兼容接口](https://aistudio.google.com/docs/openai)、[OpenAI 与 ChatGPT 计费区分](https://help.openai.com/en/articles/9039756-managing-billing-for-chatgpt-and-the-api-platform)。
+
+
+## 古今语言转换
+
+翻译也包含同一语言的古今转换。目标为中文时，文言文译为现代汉语；目标为英文时，古英语或中古英语译为现代英语。原文仍按既有流程朗读，不因同语种而跳过译文。背景介绍仍可独立开关。系统 TTS 使用现代语音，不能保证复原古代发音；翻译质量依赖所选模型，尚未完成真实模型验收。
+
+2026-11-27：macOS 本地 Release 1.0.10（12）已生成，Developer ID 签名并验签，未公证；15 项相关单元检查通过、静态分析无问题。其他平台尚未打包本轮修复。古今翻译质量和真实在线服务调用等待手动验收。

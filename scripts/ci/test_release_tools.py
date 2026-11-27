@@ -22,7 +22,7 @@ class ReleaseTests(unittest.TestCase):
         self.addCleanup(self.root_patch.stop)
         (self.root / 'release').mkdir()
         self.manifest = {'release_tag': 'apps-build10', **{
-            p: {'version': '1.0.7', 'build': 10} for p in release.PLATFORMS}}
+            p: {'version': '1.0.7', 'build': 10} for p in (*release.PLATFORMS, 'ios')}}
         (self.root / 'release/platforms.json').write_text(json.dumps(self.manifest))
 
     def test_missing_artifact_prevents_release_notes(self):

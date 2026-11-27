@@ -348,6 +348,12 @@ void main() {
     );
     await invoke();
     expect(requests.last.url.path, '/api/chat');
+    final prompt =
+        (jsonDecode(requests.last.body)['messages'] as List).first['content']
+            as String;
+    expect(prompt, contains('Classical or Literary Chinese'));
+    expect(prompt, contains('Old or Middle English'));
+    expect(prompt, contains('Never skip translation'));
     expect(requests.last.headers['authorization'], isNull);
     await s.update(
       provider: 'online',
@@ -368,6 +374,141 @@ void main() {
       ),
       throwsFormatException,
     );
+    s.dispose();
+    client.close();
+  });
+  test('transient Gemini 503 retries the same model and succeeds', () async {
+    final s = TranslationSettings();
+    await s.selectService('gemini');
+    await s.update(model: 'gemini-3.8-flash', apiKey: 'private-test-key');
+    var calls = 0;
+    final delays = <Duration>[];
+    final client = MockClient((r) async {
+      calls++;
+      expect(r.url.path, '/v1beta/openai/chat/completions');
+      expect(jsonDecode(r.body)['model'], 'gemini-3.8-flash');
+      if (calls < 3) {
+        return http.Response(
+          jsonEncode({
+            'error': {'status': 'UNAVAILABLE'},
+          }),
+          503,
+        );
+      }
+      return http.Response(
+        jsonEncode({
+          'choices': [
+            {
+              'message': {
+                'content': jsonEncode({
+                  'translation': 'Translated',
+                  'background': '',
+                  'sourceLanguage': 'en',
+                }),
+              },
+            },
+          ],
+        }),
+        200,
+      );
+    });
+    final translator = ConfiguredParagraphTranslator(
+      s,
+      client: client,
+      retryWait: (d) async {
+        delays.add(d);
+      },
+    );
+    final result = await translator.translate(
+      original: 'Hello',
+      targetLanguage: 'zh',
+      bookTitle: 'Book',
+      chapterTitle: 'One',
+      includeBackground: false,
+    );
+    expect(result.translation, 'Translated');
+    expect(calls, 3);
+    expect(delays.length, 2);
+    expect(delays[1], greaterThan(delays[0]));
+    s.dispose();
+    client.close();
+  });
+  test('persistent 503 reports safe service status; authorization failures do not retry', () async {
+    final s = TranslationSettings();
+    await s.selectService('gemini');
+    var calls = 0, code = 503;
+    final client = MockClient((_) async {
+      calls++;
+      return http.Response(
+        jsonEncode({
+          'error': {
+            'status': 'UNAVAILABLE',
+            'message': 'private-key-and-book-excerpt',
+          },
+        }),
+        code,
+      );
+    });
+    final translator = ConfiguredParagraphTranslator(
+      s,
+      client: client,
+      retryWait: (_) async {},
+    );
+    Future<ParagraphLesson> invoke() => translator.translate(
+      original: 'Hello',
+      targetLanguage: 'zh',
+      bookTitle: 'Book',
+      chapterTitle: 'One',
+      includeBackground: false,
+    );
+    await expectLater(
+      invoke(),
+      throwsA(
+        predicate(
+          (e) =>
+              e.toString().contains('HTTP 503 (UNAVAILABLE)') &&
+              !e.toString().contains('private-key-and-book-excerpt'),
+        ),
+      ),
+    );
+    expect(calls, 3);
+    code = 403;
+    calls = 0;
+    await expectLater(
+      invoke(),
+      throwsA(predicate((e) => e.toString().contains('HTTP 403'))),
+    );
+    expect(calls, 1);
+    s.dispose();
+    client.close();
+  });
+  test('pausing translation prevents another automatic retry', () async {
+    final s = TranslationSettings();
+    await s.selectService('gemini');
+    var calls = 0;
+    final client = MockClient((_) async {
+      calls++;
+      return http.Response('{}', 503);
+    });
+    late ConfiguredParagraphTranslator translator;
+    translator = ConfiguredParagraphTranslator(
+      s,
+      client: client,
+      retryWait: (_) async {
+        translator.cancelPending();
+      },
+    );
+    await expectLater(
+      translator.translate(
+        original: 'Hello',
+        targetLanguage: 'zh',
+        bookTitle: 'Book',
+        chapterTitle: 'One',
+        includeBackground: false,
+      ),
+      throwsStateError,
+    );
+    expect(calls, 1);
     s.dispose();
     client.close();
   });

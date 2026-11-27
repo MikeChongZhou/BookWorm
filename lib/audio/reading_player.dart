@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../history/reading_history.dart';
+import '../diagnostics/app_log.dart';
 
 import 'dart:io';
 
@@ -46,10 +47,20 @@ class DeviceSpeech implements SpeechEngine, SpeechLanguage {
   @override
   Future<void> language(String code) async {
     final locale = TranslationSettings.locales[code.split('-').first] ?? code;
-    if (await tts.isLanguageAvailable(locale) != true) {
+    final installed = await tts.getLanguages;
+    final normalized = locale.replaceAll('_', '-').toLowerCase();
+    if (installed is! List ||
+        !installed.any(
+          (value) =>
+              value is String &&
+              value.replaceAll('_', '-').toLowerCase() == normalized,
+        )) {
       throw StateError('系统未安装 $locale 语音，请在系统设置中下载');
     }
-    await tts.setLanguage(locale);
+    final changed = await tts.setLanguage(locale);
+    if (changed == 0 || changed == false) {
+      throw StateError('系统无法切换到 $locale 语音，请检查语音资源');
+    }
     if (preferredVoice?['locale']?.split('-').first == code.split('-').first) {
       await tts.setVoice(preferredVoice!);
     }
@@ -277,6 +288,11 @@ class ReadingPlayer extends ChangeNotifier {
       unawaited(ReadingHistory.instance.save());
       await persist();
     } catch (e) {
+      AppLog.instance.record(
+        'audio',
+        'progress_save_failed',
+        fields: {'errorType': e.runtimeType.toString()},
+      );
       error = '保存进度失败：$e';
       playing = false;
       unawaited(engine.stop());
@@ -403,6 +419,11 @@ class ReadingPlayer extends ChangeNotifier {
       }
     } catch (e) {
       if (generation == _generation && !disposed) {
+        AppLog.instance.record(
+          'audio',
+          'playback_failed',
+          fields: {'errorType': e.runtimeType.toString()},
+        );
         error = '听书失败：$e';
       }
     }
@@ -565,6 +586,9 @@ class ReadingPlayer extends ChangeNotifier {
 
   Future<void> pause() async {
     final wasStudy = _studyActive;
+    if (translator is TranslationCancellation) {
+      (translator as TranslationCancellation).cancelPending();
+    }
     _generation++;
     playing = false;
     buffering = false;
@@ -658,6 +682,9 @@ class ReadingPlayer extends ChangeNotifier {
 
   @override
   void dispose() {
+    if (translator is TranslationCancellation) {
+      (translator as TranslationCancellation).cancelPending();
+    }
     translationSettings.removeListener(_translationChanged);
     disposed = true;
     playing = false;
